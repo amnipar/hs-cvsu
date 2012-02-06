@@ -1,0 +1,87 @@
+Name:                hs-cvsu
+Version:             0.1.0
+Synopsis:            Haskell bindings for the cvsu library.
+Homepage:            http://github.org/amnipar/hs-cvsu
+License:             BSD3
+License-file:        LICENSE
+Author:              Matti Johannes Eskelinen
+Maintainer:          matti.j.eskelinen@gmail.com
+-- Copyright:
+Stability:           Experimental
+Category:            AI, Graphics, Machine Vision
+Build-type:          Simple
+-- Extra-source-files:
+Cabal-version:       >=1.8
+
+Library
+  Exposed-modules:
+    Graphical,
+    CVSU.PixelImage,
+    CVSU.ImageTree
+  Extensions:
+    ForeignFunctionInterface
+  Build-Depends:
+    base >= 3 && < 5,
+    bindings-DSL >= 1.0.7 && < 1.1,
+    parallel >= 3.2.0.0,
+    deepseq >= 1.1.0.2,
+    gloss >= 1.3.4.1,
+    CV >= 0.3.2.1
+  Other-modules:
+    CVSU.Bindings.Types,
+    CVSU.Bindings.PixelImage,
+    CVSU.Bindings.Integral,
+    CVSU.Bindings.List,
+    CVSU.Bindings.OpenCV,
+    CVSU.Bindings.ImageTree
+  Include-dirs:
+    cvsu
+    /usr/include/opencv
+  Extra-libraries:
+    opencv_calib3d,
+    opencv_contrib,
+    opencv_core,
+    opencv_features2d,
+    opencv_highgui,
+    opencv_imgproc,
+    opencv_legacy,
+    opencv_ml,
+    opencv_objdetect,
+    opencv_video
+  Includes:
+    cvsu/cvsu_config.h,
+    cvsu/cvsu_macros.h,
+    cvsu/cvsu_memory.h,
+    cvsu/cvsu_output.h,
+    cvsu/cvsu_types.h,
+    cvsu/cvsu_basic.h,
+    cvsu/cvsu_edges.h,
+    cvsu/cvsu_opencv.h,
+    cvsu/cvsu_integral.h,
+    cvsu/cvsu_list.h,
+    cvsu/cvsu_image_tree.h
+  Install-includes:
+    cvsu/cvsu_config.h,
+    cvsu/cvsu_macros.h,
+    cvsu/cvsu_memory.h,
+    cvsu/cvsu_output.h,
+    cvsu/cvsu_types.h,
+    cvsu/cvsu_basic.h,
+    cvsu/cvsu_edges.h,
+    cvsu/cvsu_opencv.h,
+    cvsu/cvsu_integral.h,
+    cvsu/cvsu_list.h,
+    cvsu/cvsu_image_tree.h
+  C-sources:
+    cvsu/cvsu_memory.c,
+    cvsu/cvsu_output.c,
+    cvsu/cvsu_types.c,
+    cvsu/cvsu_basic.c,
+    cvsu/cvsu_opencv.c,
+    cvsu/cvsu_integral.c,
+    cvsu/cvsu_list.c,
+    cvsu/cvsu_image_tree.c
+
+source-repository head
+  type:     git
+  location: git@yousource.it.jyu.fi:hs-cvsu/hs-cvsu.git
