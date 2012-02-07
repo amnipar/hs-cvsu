@@ -52,12 +52,14 @@ module CVSU.ImageTree
 , withForestFromGreyCVImage
 , withForestFromColorCVImage
 , forestImage
+, forestSize
 , touchForest
 , updateForest
 , mapDeep
 , updateTree
 , divideForest
 , divideTree
+, filterForest
 , colorPairToUV
 , uvToColor
 , forestGeometry
@@ -191,7 +193,7 @@ data ImageBlock v =
     s :: Float,
     w :: Float,
     value :: !v
-  }
+    } deriving Eq
 
 data ImageTree v = EmptyTree |
   ImageTree
@@ -201,16 +203,29 @@ data ImageTree v = EmptyTree |
   , ne :: ImageTree v
   , sw :: ImageTree v
   , se :: ImageTree v
-  }
+  } deriving Eq
 
 data ImageForest v =
   NullForest |
   ImageForest {
     forestPtr :: !(ForeignPtr C'image_tree_forest),
+    img :: PixelImage,
     rows :: Int,
     cols :: Int,
     trees :: ![ImageTree v]
-  }
+    }
+
+--instance (Eq a) => Eq (ImageBlock a) where
+--  (==) (ImageBlock na ea sa wa va) (ImageBlock nb eb sb wb vb) =
+--    na == nb && ea == eb && sa == sb && wa == wb && va == vb
+
+--instance (Eq a) => Eq (ImageTree a) where
+--(==) (ImageTree pa ba nwa nea swa sea) (ImageTree pb bb nwb neb swb seb) =
+
+instance Eq (ImageForest a) where
+  (==) NullForest NullForest = True
+  (==) (ImageForest ap _ _ _ _) (ImageForest bp _ _ _ _) = ap == bp
+  (==) _ _ = False
 
 -- make ImageBlock a functor and applicative to allow fmapping
 
@@ -232,7 +247,7 @@ instance Applicative ImageTree where
 
 instance Functor ImageForest where
   fmap f NullForest = NullForest
-  fmap f (ImageForest ptr r c ts) = (ImageForest ptr r c (map (fmap f) ts))
+  fmap f (ImageForest ptr i r c ts) = (ImageForest ptr i r c (map (fmap f) ts))
 
 class Directed a where
   toDir :: a -> Dir
@@ -311,7 +326,7 @@ instance (Show a) => Show (ImageTree a) where
 
 instance (Show a) => Show (ImageForest a) where
   show NullForest = "(NullForest)"
-  show (ImageForest p r c ts) = "(ImageForest " ++
+  show (ImageForest p i r c ts) = "(ImageForest " ++
     (show r) ++ "x" ++ (show c) ++ " " ++ (show ts) ++ ")"
 
 blockStat :: (StatColor -> Stat) -> ImageBlock StatColor -> Stat
@@ -446,14 +461,18 @@ forestFromPtr :: ForeignPtr C'image_tree_forest -> IO (ImageForest StatColor)
 forestFromPtr ptr = do
   withForeignPtr ptr $ \fPtr -> do
     C'image_tree_forest{
+      c'image_tree_forest'original = i_ptr,
       c'image_tree_forest'rows = r,
       c'image_tree_forest'cols = c,
       c'image_tree_forest'roots = rPtr
     } <- peek fPtr
+    poke (p'image_tree_forest'own_original fPtr) 0
+    i <- ptrToPixelImage i_ptr
     rs <- peekArray ((fromIntegral r) * (fromIntegral c)) rPtr
     return $
       ImageForest
       { forestPtr = ptr
+      , img = i
       , rows = (fromIntegral r)
       , cols = (fromIntegral c)
       , trees = map rootToImageTree rs
@@ -603,13 +622,30 @@ readCVImageForest i w h =
               print $ "Error: failed to create pixel image from CV image"
               return $ NullForest
 
+-- TODO: should perhaps make a clone of the image instead of repossessing it
+-- this will cause problems if same forest structure is used with multiple images
+-- (like an image sequence or a video stream)
 forestImage :: (ImageForest a) -> IO (PixelImage)
 forestImage f =
   withForeignPtr (forestPtr f) $ \f_ptr -> do
     C'image_tree_forest{
       c'image_tree_forest'original = i_ptr
     } <- peek f_ptr
+    poke (p'image_tree_forest'own_original f_ptr) 0
     ptrToPixelImage i_ptr
+
+--forestWithImage :: (ImageForest a) -> (ImageForest a)
+--forestWithImage f@(ImageForest ptr i r c ts)
+--  | i /= NullImage = f
+--  | otherwise = (ImageForest ptr (lift $ forestImage f) r c ts)
+
+forestSize :: (ImageForest a) -> IO (Int, Int)
+forestSize f =
+  withForeignPtr (forestPtr f) $ \f_ptr -> do
+    i_ptr <- peek $ p'image_tree_forest'original f_ptr
+    w <- peek $ p'pixel_image'width i_ptr
+    h <- peek $ p'pixel_image'height i_ptr
+    return (fromIntegral w, fromIntegral h)
 
 touchForest :: ImageForest a -> ImageForest a
 touchForest f@ImageForest{ forestPtr = ptr } =
@@ -668,14 +704,14 @@ mapDeep op xs =
 
 updateForest :: ImageForest StatColor -> ImageForest StatColor
 updateForest NullForest = NullForest
-updateForest f@(ImageForest ptr r c ts) =
+updateForest f@(ImageForest ptr i r c ts) =
   unsafePerformIO $ do
     --print $ "updateForest"
     withForeignPtr ptr $ \f_ptr -> do
       result <- c'image_tree_forest_update_prepare f_ptr
       if result == c'SUCCESS
         then do
-          return $ (ImageForest ptr r c (mapDeep updateTree ts))
+          return $ (ImageForest ptr i r c (mapDeep updateTree ts))
         else do
           print $ "Error: " ++ (show result)
           return f
@@ -703,8 +739,8 @@ divideWithDevBigger _ t = t
 
 divideForest :: ImageForest StatColor -> ImageForest StatColor
 divideForest NullForest = NullForest
-divideForest (ImageForest ptr r c ts) =
-  (ImageForest ptr r c (mapDeep divideTree ts))
+divideForest (ImageForest ptr i r c ts) =
+  (ImageForest ptr i r c (mapDeep divideTree ts))
 
 divideTree :: ImageTree StatColor -> ImageTree StatColor
 divideTree EmptyTree = EmptyTree
@@ -717,6 +753,10 @@ divideTree (ImageTree ptr _ EmptyTree EmptyTree EmptyTree EmptyTree) =
       else do
         return $ EmptyTree
 divideTree t = t
+
+filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
+filterForest cond (ImageForest ptr i r c ts) =
+  (ImageForest ptr i r c (filter (cond . value . block) $! ts))
 
 boundToByte :: Float -> Int
 boundToByte d
@@ -1329,8 +1369,8 @@ analyzeTree (ImageTree p b@(ImageBlock bn be bs bw _) tnw tne tsw tse) =
         s = if d < 10 then NoEdge else Edge
 
 analyzeForest :: ImageForest StatColor -> ImageForest ObjectInfo
-analyzeForest (ImageForest p r c ts) =
-  (ImageForest p r c (mapDeep analyzeTree ts))
+analyzeForest (ImageForest p i r c ts) =
+  (ImageForest p i r c (mapDeep analyzeTree ts))
 
 analyzeTreeDir :: CenterPoint -> ImageTree ObjectInfo -> ImageTree ObjectInfo
 analyzeTreeDir c EmptyTree = EmptyTree
@@ -1348,8 +1388,8 @@ analyzeTreeDir cp
 
 analyzeForestDir :: CenterPoint -> ImageForest ObjectInfo ->
     ImageForest ObjectInfo
-analyzeForestDir cp (ImageForest p r c ts) =
-  (ImageForest p r c (mapDeep (analyzeTreeDir cp) ts))
+analyzeForestDir cp (ImageForest p i r c ts) =
+  (ImageForest p i r c (mapDeep (analyzeTreeDir cp) ts))
 
 objectCenter :: ImageForest ObjectInfo -> ImageObject CenterPoint
 objectCenter NullForest = (ImageObject 0 NullForest (0,0))

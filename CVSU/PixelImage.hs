@@ -19,7 +19,7 @@ import Foreign.ForeignPtr
 import Foreign.Storable
 import Data.Maybe
 
-data PixelType = U8 | S8 | U16 | S16 | U32 | S32 | U64 | S64 | F32 | F64
+data PixelType = U8 | S8 | U16 | S16 | U32 | S32 | U64 | S64 | F32 | F64 deriving (Eq, Show)
 
 cPixelType :: PixelType -> C'pixel_type
 cPixelType t =
@@ -48,9 +48,9 @@ hPixelType t =
     c'p_S64  -> S64
     c'p_F32  -> F32
     c'p_F64  -> F64
-    c'p_NONE -> U8
+    --c'p_NONE -> U8
 
-data PixelFormat = Grey | UYVY | RGB | BGR | HSV | YUV | LAB | RGBA
+data PixelFormat = Grey | UYVY | RGB | BGR | HSV | YUV | LAB | RGBA deriving (Eq, Show)
 
 cPixelFormat :: PixelFormat -> C'pixel_format
 cPixelFormat f =
@@ -68,7 +68,7 @@ cPixelFormat f =
 hPixelFormat :: C'pixel_format -> PixelFormat
 hPixelFormat f =
   case f of
-    c'Grey -> Grey
+    c'GREY -> Grey
     c'UYVY -> UYVY
     c'RGB  -> RGB
     -- c'BGR  -> BGR
@@ -76,7 +76,7 @@ hPixelFormat f =
     c'YUV  -> YUV
     c'LAB  -> LAB
     c'RGBA -> RGBA
-    c'NONE -> Grey
+    -- c'NONE -> GREY
 
 formatToStep :: PixelFormat -> Int
 formatToStep f =
@@ -101,7 +101,7 @@ data PixelImage =
   , pixelFormat :: PixelFormat
   , width :: Int
   , height :: Int
-  }
+  } deriving Eq
 
 allocPixelImage :: IO (Maybe (ForeignPtr C'pixel_image))
 allocPixelImage = do
