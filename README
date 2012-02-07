@@ -1,0 +1,17 @@
+hs-cvsu v.0.1.0
+
+Haskell bindings for the cvsu library.
+
+This library contains bindings to the c code in cvsu library, based on
+bindings-dsl, haskell types wrapped around them, and many functions for
+utilizing the scene understanding features of cvsu.
+
+Installation:
+
+cabal-dev is recommended for experimenting with this library.
+
+At the moment you need to get the c sources of cvsu into hs-cvsu directory:
+
+cd hs-cvsu
+git clone git@yousource.it.jyu.fi:cvsu/cvsu.git
+cabal-dev install

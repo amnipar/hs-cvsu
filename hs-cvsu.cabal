@@ -1,16 +1,19 @@
 Name:                hs-cvsu
 Version:             0.1.0
 Synopsis:            Haskell bindings for the cvsu library.
+Description:         This library contains bindings to the c code in cvsu
+                     library, based on bindings-dsl, haskell types wrapped
+                     around them, and many functions for utilizing the scene
+                     understanding features of cvsu.
 Homepage:            http://github.org/amnipar/hs-cvsu
 License:             BSD3
 License-file:        LICENSE
 Author:              Matti Johannes Eskelinen
 Maintainer:          matti.j.eskelinen@gmail.com
--- Copyright:
 Stability:           Experimental
 Category:            AI, Graphics, Machine Vision
 Build-type:          Simple
--- Extra-source-files:
+Extra-source-files:  README
 Cabal-version:       >=1.8
 
 Library
