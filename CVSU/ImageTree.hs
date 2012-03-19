@@ -47,17 +47,21 @@ module CVSU.ImageTree
 , treeStatDir
 , readImageForest
 , readCVImageForest
+, reloadForest
+, loadForest
 , withForest
 , withForestFromImage
 , withForestFromGreyCVImage
 , withForestFromColorCVImage
 , forestImage
 , forestSize
+, forestGetSize
 , touchForest
 , updateForest
 , mapDeep
 , updateTree
 , divideForest
+, divideWithDevBigger
 , divideTree
 , filterForest
 , colorPairToUV
@@ -622,6 +626,24 @@ readCVImageForest i w h =
               print $ "Error: failed to create pixel image from CV image"
               return $ NullForest
 
+reloadForest :: ImageForest a -> Int -> Int -> ImageForest StatColor
+reloadForest f w h = 
+  unsafePerformIO $
+    withForeignPtr (forestPtr f) $ \f_ptr -> do
+      result <- c'image_tree_forest_reload f_ptr (fromIntegral w) (fromIntegral h)
+      if result == c'SUCCESS
+        then
+          forestFromPtr $ forestPtr f
+        else
+          return $ NullForest
+
+loadForest :: FilePath -> Int -> Int -> ImageForest StatColor
+loadForest p w h =
+  unsafePerformIO $ do
+    image <- readFromFile p
+    forest <- readCVImageForest image w h
+    return forest
+
 -- TODO: should perhaps make a clone of the image instead of repossessing it
 -- this will cause problems if same forest structure is used with multiple images
 -- (like an image sequence or a video stream)
@@ -640,12 +662,19 @@ forestImage f =
 --  | otherwise = (ImageForest ptr (lift $ forestImage f) r c ts)
 
 forestSize :: (ImageForest a) -> IO (Int, Int)
+forestSize NullForest = return (0,0)
 forestSize f =
   withForeignPtr (forestPtr f) $ \f_ptr -> do
     i_ptr <- peek $ p'image_tree_forest'original f_ptr
     w <- peek $ p'pixel_image'width i_ptr
     h <- peek $ p'pixel_image'height i_ptr
     return (fromIntegral w, fromIntegral h)
+
+forestGetSize :: (ImageForest a) -> (Int, Int)
+forestGetSize f =
+  unsafePerformIO $ do
+    (w,h) <- forestSize f
+    return (w,h)
 
 touchForest :: ImageForest a -> ImageForest a
 touchForest f@ImageForest{ forestPtr = ptr } =
@@ -735,7 +764,12 @@ divideWithDevBigger n t@(ImageTree _ b EmptyTree EmptyTree EmptyTree EmptyTree)
   | d > n     = divideTree t
   | otherwise = t
   where d = statDev . statColor . value $ b
-divideWithDevBigger _ t = t
+divideWithDevBigger n (ImageTree p b tnw tne tsw tse) =
+  (ImageTree p b
+    (divideWithDevBigger n tnw)
+    (divideWithDevBigger n tne)
+    (divideWithDevBigger n tsw)
+    (divideWithDevBigger n tse))
 
 divideForest :: ImageForest StatColor -> ImageForest StatColor
 divideForest NullForest = NullForest

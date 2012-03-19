@@ -63,6 +63,9 @@ import Foreign.ForeignPtr
 #ccall image_tree_forest_create , Ptr <image_tree_forest> -> \
   Ptr <pixel_image> -> CUShort -> CUShort -> IO <result>
 
+#ccall image_tree_forest_reload , Ptr <image_tree_forest> -> \
+  CUShort -> CUShort -> IO <result>
+  
 #ccall image_tree_forest_destroy , Ptr <image_tree_forest> -> IO <result>
 
 #ccall image_tree_forest_nullify , Ptr <image_tree_forest> -> IO <result>
