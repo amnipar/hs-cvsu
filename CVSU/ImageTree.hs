@@ -30,7 +30,9 @@ module CVSU.ImageTree
 , statDirColorMean2
 , ImageBlock(..)
 , ImageTree(..)
+, NeighborImageTree(..)
 , ImageForest(..)
+, NeighborImageForest(..)
 , Directed(..)
 , Graphical(..)
 , Colorable(..)
@@ -63,6 +65,7 @@ module CVSU.ImageTree
 , divideForest
 , divideWithDevBigger
 , divideTree
+, findTreeNeighbors
 , filterForest
 , colorPairToUV
 , uvToColor
@@ -102,6 +105,7 @@ import CVSU.Bindings.List
 import CVSU.Bindings.OpenCV
 import CVSU.Bindings.ImageTree
 import CVSU.PixelImage
+import CVSU.List
 
 import Foreign.C.String
 import Foreign.Ptr
@@ -208,6 +212,8 @@ data ImageTree v = EmptyTree |
   , sw :: ImageTree v
   , se :: ImageTree v
   } deriving Eq
+  
+newtype NeighborImageTree a = NIT(ImageTree a)
 
 data ImageForest v =
   NullForest |
@@ -218,6 +224,8 @@ data ImageForest v =
     cols :: Int,
     trees :: ![ImageTree v]
     }
+
+newtype NeighborImageForest a = NIF(ImageForest a)
 
 --instance (Eq a) => Eq (ImageBlock a) where
 --  (==) (ImageBlock na ea sa wa va) (ImageBlock nb eb sb wb vb) =
@@ -251,7 +259,7 @@ instance Applicative ImageTree where
 
 instance Functor ImageForest where
   fmap f NullForest = NullForest
-  fmap f (ImageForest ptr i r c ts) = (ImageForest ptr i r c (map (fmap f) ts))
+  fmap f (ImageForest ptr i r c ts) = (ImageForest ptr i r c (mapDeep (fmap f) ts))
 
 class Directed a where
   toDir :: a -> Dir
@@ -418,9 +426,8 @@ treeStatDir :: (StatColor -> Stat) -> ImageTree StatColor -> StatDir
 treeStatDir f t = StatDir(blockStat f (block t),treeDir f t)
 
 treeFromPtr :: Ptr C'image_tree -> ImageTree StatColor
-treeFromPtr ptr
-  | ptr == nullPtr = EmptyTree
-  | otherwise    = unsafePerformIO $ do
+treeFromPtr nullPtr = EmptyTree 
+treeFromPtr ptr = unsafePerformIO $ do
     t <- peek ptr
     C'image_block{
     c'image_block'x = x,
@@ -787,6 +794,29 @@ divideTree (ImageTree ptr _ EmptyTree EmptyTree EmptyTree EmptyTree) =
       else do
         return $ EmptyTree
 divideTree t = t
+
+treeFromListItem :: Ptr C'list_item -> ImageTree StatColor
+treeFromListItem i_ptr = 
+  unsafePerformIO $ do
+    i <- peek i_ptr
+    return $ treeFromPtr $ castPtr $ c'list_item'data i
+
+findTreeNeighbors :: ImageTree a -> [ImageTree StatColor]
+findTreeNeighbors (ImageTree t_ptr _ _ _ _ _) = 
+  unsafePerformIO $ do
+    flist <- allocList
+    if isNothing flist
+      then do
+        print $ "Failed to allocate list"
+        return $ []
+      else
+        withForeignPtr (fromJust flist) $ \l_ptr -> do
+          result <- c'image_tree_find_all_immediate_neighbors l_ptr t_ptr
+          if result == c'SUCCESS
+            then
+              return $! hlist $ createList (fromJust flist) treeFromListItem
+            else
+              return []
 
 filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
 filterForest cond (ImageForest ptr i r c ts) =

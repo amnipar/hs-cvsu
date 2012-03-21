@@ -16,6 +16,11 @@ import Foreign.ForeignPtr
 -- import System.IO.Unsafe
 -- import Data.Maybe
 
+-- #starttype image_tree_neighbor
+-- #field tree     , Ptr <image_tree>
+-- #field strength , CFloat
+-- #stoptype
+
 #starttype image_tree
 #field root   , Ptr <image_tree_root>
 #field parent , Ptr <image_tree>
@@ -24,6 +29,11 @@ import Foreign.ForeignPtr
 #field sw     , Ptr <image_tree>
 #field se     , Ptr <image_tree>
 #field block  , Ptr <image_block>
+#field n      , <image_tree>
+#field e      , <image_tree>
+#field s      , <image_tree>
+#field w      , <image_tree>
+#field level  , CULong
 #stoptype
 
 #starttype image_tree_root
@@ -82,3 +92,17 @@ import Foreign.ForeignPtr
 #ccall image_tree_update , Ptr <image_tree> -> IO <result>
 
 #ccall image_tree_divide , Ptr <image_tree> -> IO <result>
+
+#ccall image_tree_create_neighbor_list , Ptr <list> -> IO <result>
+
+#ccall image_tree_get_direct_neighbor , Ptr <image_tree> -> Ptr <image_tree> -> <direction> -> IO <result>
+
+#ccall image_tree_get_direct_neighbor_n , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
+
+#ccall image_tree_get_direct_neighbor_e , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
+
+#ccall image_tree_get_direct_neighbor_s , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
+
+#ccall image_tree_get_direct_neighbor_w , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
+
+#ccall image_tree_find_all_immediate_neighbors , Ptr <list> -> Ptr <image_tree> -> IO <result>

@@ -7,11 +7,26 @@ module CVSU.Bindings.Types where
 
 import Foreign.Ptr
 
+-- direction type and enum values
+
+#integral_t direction
+
+#num d_NULL
+#num d_N
+#num d_NE
+#num d_E
+#num d_SE
+#num d_S
+#num d_SW
+#num d_W
+#num d_NW
+
 -- result type and enum values
 
 #integral_t result
 
 #num SUCCESS
+#num FATAL
 #num CAUGHT_ERROR
 #num BAD_POINTER
 #num BAD_TYPE
