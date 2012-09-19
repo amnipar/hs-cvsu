@@ -33,3 +33,19 @@ import Foreign.Ptr
 #field item_chunk , <chunk>
 #field data_chunk , <chunk>
 #stoptype
+
+#ccall list_alloc , IO (Ptr <list>)
+
+#ccall list_free , Ptr <list> -> IO ()
+
+#ccall list_create , Ptr <list> -> CULong -> CULong -> CULong -> IO <result>
+
+#ccall list_destroy , Ptr <list> -> IO <result>
+
+#ccall list_nullify , Ptr <list> -> IO <result>
+
+#ccall list_clear , Ptr <list> -> IO <result>
+
+#ccall list_append , Ptr <list> -> Ptr () -> IO <result>
+
+#ccall list_prepend , Ptr <list> -> Ptr () -> IO <result>
