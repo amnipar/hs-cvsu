@@ -32,8 +32,6 @@ module CVSU.ImageTree
 , ImageTree(..)
 , ImageForest(..)
 , Directed(..)
-, Graphical(..)
-, Colorable(..)
 , blockStat
 , blockMean
 , blockStatMean
@@ -61,7 +59,7 @@ module CVSU.ImageTree
 , divideTree
 , filterForest
 , colorPairToUV
-, uvToColor
+--, uvToColor
 , forestGeometry
 , normalize
 , treeToBlockWithFeatureVector
@@ -110,9 +108,6 @@ import Control.Applicative
 import Control.Exception hiding (block)
 import Control.Parallel.Strategies
 import Control.DeepSeq
-import Graphical
-import Graphics.Gloss.Data.Picture
-import Graphics.Gloss.Data.Color
 import CV.Image
 import GHC.Float
 import Debug.Trace
@@ -270,52 +265,6 @@ instance Directed StatDirColor where
 instance (Directed a) => Directed (ImageBlock a) where
   toDir ImageBlock{ value = v } = toDir v
 
---instance Colorable Statistics where
---  toColor (Statistics mean _) = makeColor8 mean mean mean 255
-
-instance Colorable Stat where
-  toColor (Stat(m,_)) = makeColor8 m m m 255
-
-instance Colorable StatDir where
-  toColor (StatDir(Stat(m,_),_)) = makeColor8 m m m 255
-
-instance Colorable StatColor where
-  toColor (StatColor(Stat(m,_),_,_)) = makeColor8 m m m 255
-
-instance Colorable DirColor where
-  toColor a = white
-
-instance Colorable StatDirColor where
-  toColor (StatDirColor(StatDir(Stat(m,_),_),_,_)) = makeColor8 m m m 255
-
-instance (Colorable a) => Colorable (ImageBlock a) where
-  toColor ImageBlock{ value = v} = toColor v
-
-toLine :: Dir -> Float -> Float -> Float -> Float -> Picture
-toLine (Dir(h,v)) n e s w
-  | h == 0 && v /= 0 = line [((w+e)/2,n),((w+e)/2,s)] -- vertical line
-  | h /= 0 && v == 0 = line [(w,(n+s)/2),(e,(n+s)/2)] -- horizontal line
-  | h >  0 && v >  0 = line [(w,s),(e,n)]
-  | h <  0 && v <  0 = line [(w,s),(e,n)]
-  | h > 0  && v <  0 = line [(w,n),(e,s)]
-  | h < 0  && v >  0 = line [(w,n),(e,s)]
-  | otherwise        = blank
-
-instance (Directed a, Colorable a) => Graphical (ImageBlock a) where
-  draw (ImageBlock n e s w v) = pictures [
-    color (toColor v) $ polygon [(w,n),(e,n),(e,s),(w,s)],
-    color black       $ toLine (toDir v) n e s w ]
-
-instance (Directed a, Colorable a) => Graphical (ImageTree a) where
-  draw (ImageTree _ b EmptyTree EmptyTree EmptyTree EmptyTree) = draw b
-  draw (ImageTree _ b tnw tne tsw tse)
-    | toDir b /= nullDir = draw b
-    | otherwise          = pictures [draw tnw, draw tne, draw tsw, draw tse]
-  draw _ = blank
-
-instance (Directed a, Colorable a) => Graphical (ImageForest a) where
-  draw ImageForest{ forestPtr = ptr, trees = ts } = pictures $ map draw ts
-
 instance (Show v) => Show (ImageBlock v) where
   show (ImageBlock bn be bs bw bv) =
     "("++(show bn)++","++(show be)++","++(show bs)++","++(show bw)++","++(show bv)++")"
@@ -467,12 +416,12 @@ forestFromPtr ptr = do
       c'image_tree_forest'roots = rPtr
     } <- peek fPtr
     poke (p'image_tree_forest'own_original fPtr) 0
-    i <- ptrToPixelImage i_ptr
+    --i <- ptrToPixelImage True i_ptr
     rs <- peekArray ((fromIntegral r) * (fromIntegral c)) rPtr
     return $
       ImageForest
       { forestPtr = ptr
-      , img = i
+      , img = NullImage
       , rows = (fromIntegral r)
       , cols = (fromIntegral c)
       , trees = map rootToImageTree rs
@@ -632,7 +581,7 @@ forestImage f =
       c'image_tree_forest'original = i_ptr
     } <- peek f_ptr
     poke (p'image_tree_forest'own_original f_ptr) 0
-    ptrToPixelImage i_ptr
+    return NullImage -- ptrToPixelImage True i_ptr
 
 --forestWithImage :: (ImageForest a) -> (ImageForest a)
 --forestWithImage f@(ImageForest ptr i r c ts)
@@ -772,13 +721,14 @@ colorPairToUV (c1,c2) =
         u = ((fromIntegral c1 / 255.0) * 2.0 * 0.436) - 0.436
         v = ((fromIntegral c2 / 255.0) * 2.0 * 0.615) - 0.615
 
-uvToColor :: (Float, Float) -> Color
-uvToColor (u,v) =
-  makeColor r g b 1.0
-  where
-        r = (0.75 + 0.00000 * u + 1.13983 * v)
-        g = (0.75 - 0.39465 * u - 0.58060 * v)
-        b = (0.75 + 2.03211 * u + 0.00000 * v)
+--uvToColor :: (Float, Float) -> Color
+--uvToColor (u,v) =
+--  makeColor r g b 1.0
+--  where
+--        r = (0.75 + 0.00000 * u + 1.13983 * v)
+--        g = (0.75 - 0.39465 * u - 0.58060 * v)
+--        b = (0.75 + 2.03211 * u + 0.00000 * v)
+
 -- r = boundToByte $ 255.0 * (0.5 + 0.00000 * u + 1.13983 * v)
 -- g = boundToByte $ 255.0 * (0.5 - 0.39465 * u - 0.58060 * v)
 -- b = boundToByte $ 255.0 * (0.5 + 2.03211 * u + 0.00000 * v)

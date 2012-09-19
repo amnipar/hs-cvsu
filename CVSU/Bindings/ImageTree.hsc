@@ -24,6 +24,10 @@ import Foreign.ForeignPtr
 #field sw     , Ptr <image_tree>
 #field se     , Ptr <image_tree>
 #field block  , Ptr <image_block>
+#field n      , Ptr <image_tree>
+#field e      , Ptr <image_tree>
+#field s      , Ptr <image_tree>
+#field w      , Ptr <image_tree>
 #stoptype
 
 #starttype image_tree_root
@@ -32,10 +36,6 @@ import Foreign.ForeignPtr
 #field box    , <small_integral_image_box>
 #field forest , Ptr <image_tree_forest>
 #field tree   , Ptr <image_tree>
-#field n      , Ptr <image_tree>
-#field e      , Ptr <image_tree>
-#field s      , Ptr <image_tree>
-#field w      , Ptr <image_tree>
 #stoptype
 
 #starttype image_tree_forest

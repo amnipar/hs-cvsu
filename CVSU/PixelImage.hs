@@ -2,22 +2,33 @@ module CVSU.PixelImage
 ( PixelImage(..)
 , PixelType(..)
 , PixelFormat(..)
+, valueConverter
 , formatToStep
 , formatToStride
 , allocPixelImage
 , createPixelImage
+, readPixelImage
 , createPixelImageFromData
 , convertPixelImage
+, withPixelImage
 , ptrToPixelImage
+, getAllPixels
 ) where
 
 import CVSU.Bindings.Types
 import CVSU.Bindings.PixelImage
+import CVSU.Bindings.OpenCV
 
 import Foreign.Ptr
 import Foreign.ForeignPtr
+import Foreign.C.Types
+import Foreign.C.String
+import Foreign.Marshal.Array
 import Foreign.Storable
+import Control.Monad
 import Data.Maybe
+
+import Debug.Trace
 
 data PixelType = U8 | S8 | U16 | S16 | U32 | S32 | U64 | S64 | F32 | F64 deriving (Eq, Show)
 
@@ -49,6 +60,20 @@ hPixelType t =
     c'p_F32  -> F32
     c'p_F64  -> F64
     --c'p_NONE -> U8
+
+valueConverter :: PixelType -> (Ptr() -> Int -> IO Float)
+valueConverter t =
+  case t of
+    U8  -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CUChar) o)))
+    S8  -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CSChar) o)))
+    U16 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CUShort) o)))
+    S16 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CShort) o)))
+    U32 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CULong) o)))
+    S32 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CLong) o)))
+    U64 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CLLong) o)))
+    S64 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CULLong) o)))
+    F32 -> (\p o -> (liftM realToFrac $ peek (advancePtr ((castPtr p)::Ptr CFloat) o)))
+    F64 -> (\p o -> (liftM realToFrac $ peek (advancePtr ((castPtr p)::Ptr CDouble) o)))
 
 data PixelFormat = Grey | UYVY | RGB | BGR | HSV | YUV | LAB | RGBA deriving (Eq, Show)
 
@@ -101,6 +126,10 @@ data PixelImage =
   , pixelFormat :: PixelFormat
   , width :: Int
   , height :: Int
+  , dx :: Int
+  , dy :: Int
+  , stride :: Int
+  , d :: Ptr()
   } deriving Eq
 
 allocPixelImage :: IO (Maybe (ForeignPtr C'pixel_image))
@@ -117,8 +146,7 @@ createPixelImage :: PixelType -> PixelFormat -> Int -> Int -> IO (PixelImage)
 createPixelImage t f w h = do
   img <- allocPixelImage
   if isNothing img
-    then do
-      return NullImage
+    then return NullImage
     else do
       withForeignPtr (fromJust img) $ \img_ptr -> do
         r <- c'pixel_image_create img_ptr
@@ -129,10 +157,21 @@ createPixelImage t f w h = do
             (fromIntegral $ formatToStep f)
             (fromIntegral $ formatToStride w f)
         if r /= c'SUCCESS
-          then do
-            return NullImage
-          else do
-            return $ PixelImage (fromJust img) t f w h
+          then return NullImage
+          else ptrToPixelImage True (fromJust img)
+
+readPixelImage :: String -> IO (PixelImage)
+readPixelImage f = do
+  img <- allocPixelImage
+  if isNothing img
+    then return NullImage
+    else do
+      withForeignPtr (fromJust img) $ \img_ptr ->
+        withCString f $ \c_str -> do
+          r <- c'pixel_image_create_from_file img_ptr c_str c'p_U8 c'GREY
+          if r /= c'SUCCESS
+            then return NullImage
+            else ptrToPixelImage True (fromJust img)
 
 createPixelImageFromData :: PixelType -> PixelFormat -> Int -> Int -> Ptr () -> IO (PixelImage)
 createPixelImageFromData t f w h d = do
@@ -150,10 +189,8 @@ createPixelImageFromData t f w h d = do
             (fromIntegral $ formatToStep f)
             (fromIntegral $ formatToStride w f)
         if r /= c'SUCCESS
-          then do
-            return NullImage
-          else do
-            return $ PixelImage (fromJust img) t f w h
+          then return NullImage
+          else ptrToPixelImage False (fromJust img)
 
 convertPixelImage :: PixelImage -> PixelImage -> IO (PixelImage)
 convertPixelImage src dst = do
@@ -166,20 +203,49 @@ convertPixelImage src dst = do
         else do
           return $ dst
 
-ptrToPixelImage :: Ptr C'pixel_image -> IO (PixelImage)
-ptrToPixelImage ptr
-  | ptr == nullPtr = return NullImage
-  | otherwise      = do
-    C'pixel_image{
-    c'pixel_image'type = t,
-    c'pixel_image'format = f,
-    c'pixel_image'width = w,
-    c'pixel_image'height = h
-    } <- peek ptr
-    poke (p'pixel_image'own_data ptr) 0
-    foreignPtr <- newForeignPtr p'pixel_image_free ptr
-    return $ PixelImage foreignPtr
-      (hPixelType t)
-      (hPixelFormat f)
-      (fromIntegral w)
-      (fromIntegral h)
+withPixelImage :: PixelImage -> (PixelImage -> b) -> IO b
+withPixelImage pimg op =
+  withForeignPtr (imagePtr pimg) $ \iptr -> do
+    r <- return $! op pimg
+    touchForeignPtr $ imagePtr pimg
+    return r
+
+ptrToPixelImage :: Bool -> ForeignPtr C'pixel_image -> IO (PixelImage)
+ptrToPixelImage ownsData fptr =
+  withForeignPtr fptr $ \iptr ->
+    if iptr == nullPtr
+      then return NullImage
+      else do
+        C'pixel_image{
+        c'pixel_image'data = d,
+        c'pixel_image'type = t,
+        c'pixel_image'format = f,
+        c'pixel_image'width = w,
+        c'pixel_image'height = h,
+        c'pixel_image'dx = dx,
+        c'pixel_image'dy = dy,
+        c'pixel_image'stride = stride
+        } <- peek iptr
+        setOwnership ownsData iptr
+        return $ PixelImage fptr
+          (hPixelType t)
+          (hPixelFormat f)
+          (fromIntegral w)
+          (fromIntegral h)
+          (fromIntegral dx)
+          (fromIntegral dy)
+          (fromIntegral stride)
+          d
+  where
+    setOwnership owns ptr
+      | owns == True = poke (p'pixel_image'own_data ptr) 0
+      | otherwise    = return ()
+
+getAllPixels :: PixelImage -> IO [((Int,Int),Float)]
+getAllPixels (PixelImage ptr t _ w h dx dy s d) = trace (show (t,w,h,dx,dy,s,d)) $
+  mapM getV [(x,y,(dy+y)*s+dx+x) | x <- [0..w-1], y <- [0..h-1]]
+  where
+        getV (x,y,o) = do
+          v <- vc d o
+          return ((x,y),v)
+        vc = valueConverter t
