@@ -1,5 +1,9 @@
+{-# LANGUAGE TypeFamilies #-}
 module CVSU.Types
-( Stat(..)
+( ImageBlockType(..)
+, cImageBlockType
+, ForestValue(..)
+, Stat(..)
 , Dir(..)
 , StatDir(..)
 , StatColor(..)
@@ -7,6 +11,7 @@ module CVSU.Types
 , StatDirColor(..)
 , Mean(..)
 , DivideMean(..)
+, ColorMean(..)
 , Directed(..)
 , nullDir
 , dir
@@ -40,6 +45,30 @@ module CVSU.Types
 , treeStatDir
 ) where
 
+import CVSU.Bindings.Types
+
+import Foreign.Ptr
+import Foreign.Storable
+import Control.DeepSeq
+
+data ImageBlockType =
+  BlockEmpty |
+  BlockStatGrey |
+  BlockStatColor
+
+cImageBlockType :: ImageBlockType -> C'image_block_type
+cImageBlockType t =
+  case t of
+    BlockStatGrey  -> c'b_STAT_GREY
+    BlockStatColor -> c'b_STAT_COLOR
+    _              -> c'b_NONE
+
+hImageBlockType :: C'image_block_type -> ImageBlockType
+hImageBlockType t =
+  case t of
+    c'b_STAT_GREY  -> BlockStatGrey
+    c'b_STAT_COLOR -> BlockStatColor
+    _              -> BlockEmpty
 
 newtype Stat = Stat(Int, Int) deriving (Eq, Show)
 newtype Dir = Dir(Int, Int) deriving (Eq, Show)
@@ -47,6 +76,61 @@ newtype StatDir = StatDir(Stat, Dir) deriving (Eq, Show)
 newtype StatColor = StatColor(Stat, Stat, Stat) deriving (Eq, Show)
 newtype DirColor = DirColor(Dir, Dir, Dir) deriving (Eq, Show)
 newtype StatDirColor = StatDirColor(StatDir, StatDir, StatDir) deriving (Eq, Show)
+
+class ForestValue a where
+  type Origin a :: *
+  --cType :: * -> C'image_block_type
+  toValue :: Ptr(Origin a) -> IO (a)
+  fromPtr :: Ptr() -> IO (a)
+  fromPtr p = toValue $ ((castPtr p)::Ptr (Origin a))
+
+--castForestValue :: (ForestValue b) => Ptr() -> Ptr (Origin b)
+--castForestValue = castPtr
+
+instance ForestValue Stat where
+  type Origin Stat = C'stat_grey
+  --cType Stat = c'b_STAT_GREY
+  toValue p = do
+    C'stat_grey{
+      c'stat_grey'mean = m,
+      c'stat_grey'dev = d
+    } <- peek p
+    return Stat(fromIntegral m, fromIntegral d)
+
+instance ForestValue StatColor where
+  type Origin StatColor = C'stat_color
+  --cType StatColor = c'b_STAT_COLOR
+  toValue p = do
+    C'stat_color{
+      c'stat_color'mean_i = m,
+      c'stat_color'dev_i = d,
+      c'stat_color'mean_c1 = m1,
+      c'stat_color'dev_c1 = d1,
+      c'stat_color'mean_c2 = m2,
+      c'stat_color'dev_c2 = d2
+    } <- peek p
+    return StatColor(
+      Stat((fromIntegral m),(fromIntegral d)),
+      Stat((fromIntegral m1),(fromIntegral d1)),
+      Stat((fromIntegral m2),(fromIntegral d2)))
+
+instance NFData Stat where
+  rnf (Stat(m,d)) = m `seq` d `seq` ()
+
+instance NFData Dir where
+  rnf (Dir(h,v)) = h `seq` v `seq` ()
+
+instance NFData StatDir where
+  rnf (StatDir(s,d)) = s `seq` d `seq` ()
+
+instance NFData StatColor where
+  rnf (StatColor(s,s1,s2)) = s `seq` s1 `seq` s2 `seq` ()
+
+instance NFData DirColor where
+  rnf (DirColor(d,d1,d2)) = d `seq` d1 `seq` d2 `seq` ()
+
+instance NFData StatDirColor where
+  rnf (StatDirColor(s,s1,s2)) = s `seq` s1 `seq` s2 `seq` ()
 
 type Mean = Int
 type DivideMean = (Int, Int, Int, Int)
@@ -111,81 +195,22 @@ statDirColorMean2 :: StatDirColor -> Mean
 statDirColorMean2 (StatDirColor(_,_,s2)) = statDirMean s2
 
 class Directed a where
-toDir :: a -> Dir
+  toDir :: a -> Dir
 
 instance Directed Stat where
-toDir a = nullDir
+  toDir a = nullDir
 
 instance Directed StatDir where
-toDir (StatDir(_,d)) = d
+  toDir (StatDir(_,d)) = d
 
 instance Directed StatColor where
-toDir a = nullDir
+  toDir a = nullDir
 
 instance Directed DirColor where
-toDir (DirColor(d,_,_)) = d
+  toDir (DirColor(d,_,_)) = d
 
 instance Directed StatDirColor where
-toDir (StatDirColor(StatDir(_,d),_,_)) = d
-
-instance (Directed a) => Directed (ImageBlock a) where
-toDir ImageBlock{ value = v } = toDir v
-
-blockStat :: (StatColor -> Stat) -> ImageBlock StatColor -> Stat
-blockStat f b = f . value $ b
-
-blockMean :: (StatColor -> Stat) -> ImageBlock StatColor -> Int
-blockMean f b = statMean . f . value $ b
-
-blockStatMean :: ImageBlock Stat -> Int
-blockStatMean b = statMean . value $ b
-
-blockStatColorMean :: ImageBlock StatColor -> Int
-blockStatColorMean b = statColorMean . value $ b
-
-blockDev :: (StatColor -> Stat) -> ImageBlock StatColor -> Int
-blockDev f b = statDev . f . value $ b
-
--- TODO: find out why the pair becomes inverted at some point..
--- color1 should be first, but the color is wrong if they are not inverted here
-blockColorPair :: ImageBlock StatColor -> (Int, Int)
-blockColorPair b = (statMean . statColor2 . value $ b, statMean . statColor1 . value $ b)
--- | d == nullDir = (0,0)
--- | otherwise = (statMean . statColor1 . value . block $ t, statMean . statColor2 . value . block $ t)
--- where
---   d = treeDir statColor t
-
--- for calculating directions, means from four subtrees are needed.
-treeDivideMean :: (StatColor -> Stat) -> ImageTree StatColor -> DivideMean
-treeDivideMean _ EmptyTree = (0,0,0,0)
-treeDivideMean f (ImageTree _ _ tnw tne tsw tse) =
-  ((blockMean f (block tnw)),(blockMean f (block tne)),(blockMean f (block tsw)),(blockMean f (block tse)))
-
-treeStatColorToStatDir :: (StatColor -> Stat) -> ImageTree StatColor -> ImageTree StatDir
-treeStatColorToStatDir _ EmptyTree = EmptyTree
-treeStatColorToStatDir f (ImageTree p b EmptyTree EmptyTree EmptyTree EmptyTree) =
-  (ImageTree p (fmap (nullStatDir . f) b) EmptyTree EmptyTree EmptyTree EmptyTree)
-  treeStatColorToStatDir f t@(ImageTree p b tnw tne tsw tse) =
-    (ImageTree p
-    (fmap ((statDir (treeDivideMean f t)) . f) b)
-    (fmap (nullStatDir . f) tnw)
-    (fmap (nullStatDir . f) tne)
-    (fmap (nullStatDir . f) tsw)
-    (fmap (nullStatDir . f) tse))
-
-treeStatColorToStatDirColor :: ImageTree StatColor -> ImageTree StatDirColor
-treeStatColorToStatDirColor EmptyTree = EmptyTree
-treeStatColorToStatDirColor (ImageTree p b EmptyTree EmptyTree EmptyTree EmptyTree) =
-  (ImageTree p (fmap nullStatDirColor b) EmptyTree EmptyTree EmptyTree EmptyTree)
-  treeStatColorToStatDirColor t@(ImageTree p b tnw tne tsw tse) =
-    (ImageTree p
-    (fmap (statDirColor (treeDivideMean statColor t)
-    (treeDivideMean statColor1 t)
-    (treeDivideMean statColor2 t)) b)
-    (fmap nullStatDirColor tnw)
-    (fmap nullStatDirColor tne)
-    (fmap nullStatDirColor tsw)
-    (fmap nullStatDirColor tse))
+  toDir (StatDirColor(StatDir(_,d),_,_)) = d
 
 -- direction of 'edgeness' within tree is calculated as a relation between
 -- subtree means on top and bottom (h) and left and right (v) sides.
@@ -199,18 +224,3 @@ calculateDir mnw mne msw mse
   where
         h = (mnw + mne) - (msw + mse)
         v = (mnw + msw) - (mne + mse)
-
--- TODO: min deviation for considering a tree as 'edgy' is hardcoded.
--- should move this out perhaps into a parameter.
-treeDir :: (StatColor -> Stat) -> ImageTree StatColor -> Dir
-treeDir _ EmptyTree = Dir(0,0)
-treeDir _ (ImageTree _ _ EmptyTree EmptyTree EmptyTree EmptyTree) = Dir(0,0)
-treeDir f t@(ImageTree _ _ tnw tne tsw tse)
-  | (blockDev f (block t)) < 10 = Dir(0,0)
-  | otherwise   = calculateDir (blockMean f (block tnw))
-  (blockMean f (block tne))
-  (blockMean f (block tsw))
-  (blockMean f (block tse))
-
-treeStatDir :: (StatColor -> Stat) -> ImageTree StatColor -> StatDir
-treeStatDir f t = StatDir(blockStat f (block t),treeDir f t)

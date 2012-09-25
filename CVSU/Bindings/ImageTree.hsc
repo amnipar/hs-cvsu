@@ -46,7 +46,7 @@ import Foreign.ForeignPtr
 
 #starttype image_tree_forest
 #field original        , Ptr <pixel_image>
-#field own_original    , CULong
+#field source          , Ptr <pixel_image>
 #field rows            , CUShort
 #field cols            , CUShort
 #field tree_width      , CUShort
@@ -56,8 +56,10 @@ import Foreign.ForeignPtr
 #field type            , <image_block_type>
 #field trees           , <list>
 #field blocks          , <list>
+#field values          , <list>
 #field last_base_tree  , Ptr <list_item>
 #field last_base_block , Ptr <list_item>
+#field last_base_value , Ptr <list_item>
 #field roots           , Ptr <image_tree_root>
 #stoptype
 
@@ -67,14 +69,16 @@ import Foreign.ForeignPtr
 #ccall image_tree_forest_free , Ptr <image_tree_forest> -> IO ()
 
 #ccall image_tree_forest_create , Ptr <image_tree_forest> -> \
-  Ptr <pixel_image> -> CUShort -> CUShort -> IO <result>
+  Ptr <pixel_image> -> CUShort -> CUShort -> <image_block_type> -> IO <result>
 
 #ccall image_tree_forest_reload , Ptr <image_tree_forest> -> \
-  CUShort -> CUShort -> IO <result>
-  
+  CUShort -> CUShort -> <image_block_type> -> IO <result>
+
 #ccall image_tree_forest_destroy , Ptr <image_tree_forest> -> IO <result>
 
 #ccall image_tree_forest_nullify , Ptr <image_tree_forest> -> IO <result>
+
+#ccall image_tree_forest_is_null , Ptr <image_tree_forest> -> IO <result>
 
 #ccall image_tree_forest_update_prepare , Ptr <image_tree_forest> -> IO <result>
 

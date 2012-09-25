@@ -33,6 +33,7 @@ import CVSU.Bindings.PixelImage
 import CVSU.Bindings.List
 import CVSU.Bindings.OpenCV
 import CVSU.Bindings.ImageTree
+import CVSU.Types
 import CVSU.PixelImage
 import CVSU.List
 
@@ -87,6 +88,7 @@ data ImageForest v =
   , img :: PixelImage
   , rows :: Int
   , cols :: Int
+  , blockType :: ImageBlockType
   , trees :: ![ImageTree v]
   }
 
@@ -124,28 +126,18 @@ instance Functor ImageForest where
   fmap f NullForest = NullForest
   fmap f (ImageForest ptr i r c ts) = (ImageForest ptr i r c (mapDeep (fmap f) ts))
 
-
-
-treeFromPtr :: Ptr C'image_tree -> ImageTree StatColor
-treeFromPtr nullPtr = EmptyTree
-treeFromPtr ptr = unsafePerformIO $ do
+treeFromPtr :: (ForestValue v) => Ptr C'image_tree -> ImageTree v
+treeFromPtr _ nullPtr = EmptyTree
+treeFromPtr conv ptr = unsafePerformIO $ do
     t <- peek ptr
     C'image_block{
     c'image_block'x = x,
     c'image_block'y = y,
     c'image_block'w = w,
     c'image_block'h = h,
-    c'image_block'value =
-      C'stat_color{
-      c'stat_color'mean_i = m,
-      c'stat_color'dev_i = d,
-      c'stat_color'mean_c1 = m1,
-      c'stat_color'dev_c1 = d1,
-      c'stat_color'mean_c2 = m2,
-      c'stat_color'dev_c2 = d2
-      }
+    c'image_block'value = vptr
     } <- peek (c'image_tree'block t)
-    --print $ (show m) ++ " " ++ (show d)
+    v <- fromPtr v
     return $
       ImageTree
       { treePtr = ptr
@@ -155,10 +147,7 @@ treeFromPtr ptr = unsafePerformIO $ do
         , e = (fromIntegral x) + (fromIntegral w)
         , s = (fromIntegral y) + (fromIntegral h)
         , w = (fromIntegral x)
-        , value = (StatColor(Stat((fromIntegral m),(fromIntegral d)),
-                             Stat((fromIntegral m1),(fromIntegral d1)),
-                             Stat((fromIntegral m2),(fromIntegral d2))))
-        --, value = Statistics{ mean = (fromIntegral m), dev = (fromIntegral d) }
+        , value = fromPtr v
         }
       , nw = treeFromPtr $ c'image_tree'nw t
       , ne = treeFromPtr $ c'image_tree'ne t
@@ -166,19 +155,19 @@ treeFromPtr ptr = unsafePerformIO $ do
       , se = treeFromPtr $ c'image_tree'se t
       }
 
-rootToImageTree :: C'image_tree_root -> ImageTree StatColor
+rootToImageTree :: (ForestValue v) => C'image_tree_root -> ImageTree v
 rootToImageTree r = treeFromPtr (c'image_tree_root'tree r)
 
-forestFromPtr :: ForeignPtr C'image_tree_forest -> IO (ImageForest StatColor)
+forestFromPtr :: (ForestValue v) => ForeignPtr C'image_tree_forest -> IO (ImageForest v)
 forestFromPtr ptr = do
   withForeignPtr ptr $ \fPtr -> do
     C'image_tree_forest{
       c'image_tree_forest'original = i_ptr,
       c'image_tree_forest'rows = r,
       c'image_tree_forest'cols = c,
+      c'image_tree_forest'type = t,
       c'image_tree_forest'roots = rPtr
     } <- peek fPtr
-    poke (p'image_tree_forest'own_original fPtr) 0
     --i <- ptrToPixelImage True i_ptr
     rs <- peekArray ((fromIntegral r) * (fromIntegral c)) rPtr
     return $
@@ -187,6 +176,7 @@ forestFromPtr ptr = do
       , img = NullImage
       , rows = (fromIntegral r)
       , cols = (fromIntegral c)
+      , blockType = (hImageBlockType t)
       , trees = map rootToImageTree rs
       }
 
@@ -203,7 +193,7 @@ allocImageTreeForest = do
     else do
       return Nothing
 
-withForestFromImage :: String -> Int -> Int -> (ImageForest StatColor -> b) -> IO b
+withForestFromImage :: (ForestValue v) => String -> Int -> Int -> (ImageForest v -> b) -> IO b
 withForestFromImage s w h op = do
   ptr <- allocImageTreeForest
   if isNothing ptr
@@ -228,7 +218,8 @@ withForestFromImage s w h op = do
 
 
 
-withForestFromGreyCVImage :: (Image GrayScale D8) -> Int -> Int -> (ImageForest StatColor -> b) -> IO b
+withForestFromGreyCVImage :: (ForestValue v) => Image GrayScale D8 -> Int -> Int
+  -> (ImageForest v -> b) -> IO b
 withForestFromGreyCVImage i w h op = do
   withGenImage i $ \image -> do
     pimg <- allocPixelImage
@@ -243,7 +234,8 @@ withForestFromGreyCVImage i w h op = do
           if presult == c'SUCCESS
             then do
               withForeignPtr (fromJust imgf) $ \f_ptr -> do
-                fresult <- c'image_tree_forest_create f_ptr i_ptr (fromIntegral w) (fromIntegral h)
+                fresult <- c'image_tree_forest_create f_ptr i_ptr
+                  (fromIntegral w) (fromIntegral h) c'b_STAT_GREY
                 if fresult == c'SUCCESS
                   then do
                     f <- forestFromPtr $ fromJust imgf
@@ -274,7 +266,8 @@ withForestFromColorCVImage i w h op = do
           if presult == c'SUCCESS
             then do
               withForeignPtr (fromJust imgf) $ \f_ptr -> do
-                fresult <- c'image_tree_forest_create f_ptr i_ptr (fromIntegral w) (fromIntegral h)
+                fresult <- c'image_tree_forest_create f_ptr i_ptr
+                (fromIntegral w) (fromIntegral h) c'b_STAT_GREY
                 if fresult == c'SUCCESS
                   then do
                     f <- forestFromPtr $ fromJust imgf
@@ -290,7 +283,7 @@ withForestFromColorCVImage i w h op = do
               print $ "Failed to create pixel image"
               return $ op NullForest
 
-readImageForest :: String -> Int -> Int -> IO (Maybe (ImageForest StatColor))
+readImageForest :: (ForestValue v) => String -> Int -> Int -> IO (Maybe (ImageForest v))
 readImageForest str w h = do --unsafePerformIO $ do
   -- allocate the struct - deallocated automatically by garbage collector
   ptr <- allocImageTreeForest
@@ -308,7 +301,7 @@ readImageForest str w h = do --unsafePerformIO $ do
             else do
               return $ Nothing
 
-readCVImageForest :: Image RGB D8 -> Int -> Int -> IO (ImageForest StatColor)
+readCVImageForest :: (ForestValue v) => Image RGB D8 -> Int -> Int -> IO (ImageForest v)
 readCVImageForest i w h =
   withGenImage i $ \image -> do
     pimg <- allocPixelImage
@@ -323,7 +316,8 @@ readCVImageForest i w h =
           if presult == c'SUCCESS
             then do
               withForeignPtr (fromJust imgf) $ \f_ptr -> do
-                fresult <- c'image_tree_forest_create f_ptr i_ptr (fromIntegral w) (fromIntegral h)
+                fresult <- c'image_tree_forest_create f_ptr i_ptr
+                (fromIntegral w) (fromIntegral h) c'b_STAT_GREY
                 if fresult == c'SUCCESS
                   then do
                     forestFromPtr $ fromJust imgf
@@ -334,11 +328,11 @@ readCVImageForest i w h =
               print $ "Error: failed to create pixel image from CV image"
               return $ NullForest
 
-reloadForest :: ImageForest a -> Int -> Int -> ImageForest StatColor
+reloadForest :: (ForestValue v) => ImageForest a -> Int -> Int -> ImageForest v
 reloadForest f w h =
   unsafePerformIO $
     withForeignPtr (forestPtr f) $ \f_ptr -> do
-      result <- c'image_tree_forest_reload f_ptr (fromIntegral w) (fromIntegral h)
+      result <- c'image_tree_forest_reload f_ptr (fromIntegral w) (fromIntegral h) c'b_STAT_GREY
       if result == c'SUCCESS
         then
           forestFromPtr $ forestPtr f
@@ -361,7 +355,6 @@ forestImage f =
     C'image_tree_forest{
       c'image_tree_forest'original = i_ptr
     } <- peek f_ptr
-    poke (p'image_tree_forest'own_original f_ptr) 0
     return NullImage -- ptrToPixelImage True i_ptr
 
 --forestWithImage :: (ImageForest a) -> (ImageForest a)
@@ -401,24 +394,6 @@ withForest f@ImageForest{ forestPtr = ptr } op =
 
 deep :: NFData a => a -> a
 deep a = deepseq a a
-
-instance NFData Stat where
-  rnf (Stat(m,d)) = m `seq` d `seq` ()
-
-instance NFData Dir where
-  rnf (Dir(h,v)) = h `seq` v `seq` ()
-
-instance NFData StatDir where
-  rnf (StatDir(s,d)) = s `seq` d `seq` ()
-
-instance NFData StatColor where
-  rnf (StatColor(s,s1,s2)) = s `seq` s1 `seq` s2 `seq` ()
-
-instance NFData DirColor where
-  rnf (DirColor(d,d1,d2)) = d `seq` d1 `seq` d2 `seq` ()
-
-instance NFData StatDirColor where
-  rnf (StatDirColor(s,s1,s2)) = s `seq` s1 `seq` s2 `seq` ()
 
 instance NFData (ImageTree a) where
   rnf (ImageTree _ b tnw tne tsw tse) = tnw `seq` tne `seq` tsw `seq` tse `seq` b `seq` ()
@@ -522,3 +497,80 @@ findTreeNeighbors (ImageTree t_ptr _ _ _ _ _) =
 filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
 filterForest cond (ImageForest ptr i r c ts) =
   (ImageForest ptr i r c (filter (cond . value . block) $! ts))
+
+
+
+instance (Directed a) => Directed (ImageBlock a) where
+toDir ImageBlock{ value = v } = toDir v
+
+blockStat :: (StatColor -> Stat) -> ImageBlock StatColor -> Stat
+blockStat f b = f . value $ b
+
+blockMean :: (StatColor -> Stat) -> ImageBlock StatColor -> Int
+blockMean f b = statMean . f . value $ b
+
+blockStatMean :: ImageBlock Stat -> Int
+blockStatMean b = statMean . value $ b
+
+blockStatColorMean :: ImageBlock StatColor -> Int
+blockStatColorMean b = statColorMean . value $ b
+
+blockDev :: (StatColor -> Stat) -> ImageBlock StatColor -> Int
+blockDev f b = statDev . f . value $ b
+
+-- TODO: find out why the pair becomes inverted at some point..
+-- color1 should be first, but the color is wrong if they are not inverted here
+blockColorPair :: ImageBlock StatColor -> (Int, Int)
+blockColorPair b = (statMean . statColor2 . value $ b, statMean . statColor1 . value $ b)
+-- | d == nullDir = (0,0)
+-- | otherwise = (statMean . statColor1 . value . block $ t, statMean . statColor2 . value . block $ t)
+-- where
+--   d = treeDir statColor t
+
+-- for calculating directions, means from four subtrees are needed.
+treeDivideMean :: (StatColor -> Stat) -> ImageTree StatColor -> DivideMean
+treeDivideMean _ EmptyTree = (0,0,0,0)
+treeDivideMean f (ImageTree _ _ tnw tne tsw tse) =
+  ((blockMean f (block tnw)),(blockMean f (block tne)),(blockMean f (block tsw)),(blockMean f (block tse)))
+
+treeStatColorToStatDir :: (StatColor -> Stat) -> ImageTree StatColor -> ImageTree StatDir
+treeStatColorToStatDir _ EmptyTree = EmptyTree
+treeStatColorToStatDir f (ImageTree p b EmptyTree EmptyTree EmptyTree EmptyTree) =
+  (ImageTree p (fmap (nullStatDir . f) b) EmptyTree EmptyTree EmptyTree EmptyTree)
+  treeStatColorToStatDir f t@(ImageTree p b tnw tne tsw tse) =
+    (ImageTree p
+    (fmap ((statDir (treeDivideMean f t)) . f) b)
+    (fmap (nullStatDir . f) tnw)
+    (fmap (nullStatDir . f) tne)
+    (fmap (nullStatDir . f) tsw)
+    (fmap (nullStatDir . f) tse))
+
+treeStatColorToStatDirColor :: ImageTree StatColor -> ImageTree StatDirColor
+treeStatColorToStatDirColor EmptyTree = EmptyTree
+treeStatColorToStatDirColor (ImageTree p b EmptyTree EmptyTree EmptyTree EmptyTree) =
+  (ImageTree p (fmap nullStatDirColor b) EmptyTree EmptyTree EmptyTree EmptyTree)
+treeStatColorToStatDirColor t@(ImageTree p b tnw tne tsw tse) =
+  (ImageTree p
+  (fmap (statDirColor (treeDivideMean statColor t)
+  (treeDivideMean statColor1 t)
+  (treeDivideMean statColor2 t)) b)
+  (fmap nullStatDirColor tnw)
+  (fmap nullStatDirColor tne)
+  (fmap nullStatDirColor tsw)
+  (fmap nullStatDirColor tse))
+
+
+-- TODO: min deviation for considering a tree as 'edgy' is hardcoded.
+-- should move this out perhaps into a parameter.
+treeDir :: (StatColor -> Stat) -> ImageTree StatColor -> Dir
+treeDir _ EmptyTree = Dir(0,0)
+treeDir _ (ImageTree _ _ EmptyTree EmptyTree EmptyTree EmptyTree) = Dir(0,0)
+treeDir f t@(ImageTree _ _ tnw tne tsw tse)
+  | (blockDev f (block t)) < 10 = Dir(0,0)
+  | otherwise   = calculateDir (blockMean f (block tnw))
+  (blockMean f (block tne))
+  (blockMean f (block tsw))
+  (blockMean f (block tse))
+
+treeStatDir :: (StatColor -> Stat) -> ImageTree StatColor -> StatDir
+treeStatDir f t = StatDir(blockStat f (block t),treeDir f t)

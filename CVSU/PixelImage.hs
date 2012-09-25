@@ -30,7 +30,18 @@ import Data.Maybe
 
 import Debug.Trace
 
-data PixelType = U8 | S8 | U16 | S16 | U32 | S32 | U64 | S64 | F32 | F64 deriving (Eq, Show)
+data PixelType =
+  U8  |
+  S8  |
+  U16 |
+  S16 |
+  U32 |
+  S32 |
+  U64 |
+  S64 |
+  F32 |
+  F64
+  deriving (Eq, Show)
 
 cPixelType :: PixelType -> C'pixel_type
 cPixelType t =
@@ -75,45 +86,56 @@ valueConverter t =
     F32 -> (\p o -> (liftM realToFrac $ peek (advancePtr ((castPtr p)::Ptr CFloat) o)))
     F64 -> (\p o -> (liftM realToFrac $ peek (advancePtr ((castPtr p)::Ptr CDouble) o)))
 
-data PixelFormat = Grey | UYVY | RGB | BGR | HSV | YUV | LAB | RGBA deriving (Eq, Show)
+data PixelFormat =
+  FormatNone |
+  FormatGrey |
+  FormatUYVY |
+  FormatRGB |
+  FormatBGR |
+  FormatHSV |
+  FormatYUV |
+  FormatLAB |
+  FormatRGBA
+  deriving (Eq, Show)
 
 cPixelFormat :: PixelFormat -> C'pixel_format
 cPixelFormat f =
   case f of
-    Grey -> c'GREY
-    UYVY -> c'UYVY
-    RGB  -> c'RGB
-    -- BGR  -> c'BGR
-    HSV  -> c'HSV
-    YUV  -> c'YUV
-    LAB  -> c'LAB
-    RGBA -> c'RGBA
-    _    -> c'NONE
+    FormatGrey -> c'GREY
+    FormatUYVY -> c'UYVY
+    FormatRGB  -> c'RGB
+    -- FormatBGR  -> c'BGR
+    FormatHSV  -> c'HSV
+    FormatYUV  -> c'YUV
+    FormatLAB  -> c'LAB
+    FormatRGBA -> c'RGBA
+    _         -> c'NONE
 
 hPixelFormat :: C'pixel_format -> PixelFormat
 hPixelFormat f =
   case f of
-    c'GREY -> Grey
-    c'UYVY -> UYVY
-    c'RGB  -> RGB
-    -- c'BGR  -> BGR
-    c'HSV  -> HSV
-    c'YUV  -> YUV
-    c'LAB  -> LAB
-    c'RGBA -> RGBA
-    -- c'NONE -> GREY
+    c'GREY -> FormatGrey
+    c'UYVY -> FormatUYVY
+    c'RGB  -> FormatRGB
+    -- c'BGR  -> FormatBGR
+    c'HSV  -> FormatHSV
+    c'YUV  -> FormatYUV
+    c'LAB  -> FormatLAB
+    c'RGBA -> FormatRGBA
+    _      -> FormatNone
 
 formatToStep :: PixelFormat -> Int
 formatToStep f =
   case f of
-    Grey -> 1
-    UYVY -> 2
-    RGB  -> 3
-    BGR  -> 3
-    HSV  -> 3
-    YUV  -> 3
-    LAB  -> 3
-    RGBA -> 4
+    FormatGrey -> 1
+    FormatUYVY -> 2
+    FormatRGB  -> 3
+    FormatBGR  -> 3
+    FormatHSV  -> 3
+    FormatYUV  -> 3
+    FormatLAB  -> 3
+    FormatRGBA -> 4
+    _          -> 0
 
 formatToStride :: Int -> PixelFormat -> Int
 formatToStride w f = w * formatToStep f
