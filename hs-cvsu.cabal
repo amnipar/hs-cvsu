@@ -18,6 +18,7 @@ Cabal-version:       >=1.8
 
 Library
   Exposed-modules:
+    CVSU.Types
     CVSU.PixelImage
     CVSU.Edges
     CVSU.ImageTree

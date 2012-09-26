@@ -89,7 +89,7 @@ import Foreign.Ptr
 #field y     , CUShort
 #field w     , CUShort
 #field h     , CUShort
-#field value , <stat_color>
+#field value , Ptr ()
 #stoptype
 
 -- point type

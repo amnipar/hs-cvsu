@@ -264,7 +264,7 @@ ptrToPixelImage ownsData fptr =
       | otherwise    = return ()
 
 getAllPixels :: PixelImage -> IO [((Int,Int),Float)]
-getAllPixels (PixelImage ptr t _ w h dx dy s d) = trace (show (t,w,h,dx,dy,s,d)) $
+getAllPixels (PixelImage ptr t _ w h dx dy s d) =
   mapM getV [(x,y,(dy+y)*s+dx+x) | x <- [0..w-1], y <- [0..h-1]]
   where
         getV (x,y,o) = do

@@ -2,7 +2,7 @@
 module CVSU.Types
 ( ImageBlockType(..)
 , cImageBlockType
-, ForestValue(..)
+, hImageBlockType
 , Stat(..)
 , Dir(..)
 , StatDir(..)
@@ -32,17 +32,6 @@ module CVSU.Types
 , statDirColorMean
 , statDirColorMean1
 , statDirColorMean2
-, blockStat
-, blockMean
-, blockStatMean
-, blockStatColorMean
-, blockDev
-, blockColorPair
-, treeDivideMean
-, treeStatColorToStatDir
-, treeStatColorToStatDirColor
-, treeDir
-, treeStatDir
 ) where
 
 import CVSU.Bindings.Types
@@ -55,20 +44,19 @@ data ImageBlockType =
   BlockEmpty |
   BlockStatGrey |
   BlockStatColor
+  deriving (Eq, Show)
 
 cImageBlockType :: ImageBlockType -> C'image_block_type
-cImageBlockType t =
-  case t of
-    BlockStatGrey  -> c'b_STAT_GREY
-    BlockStatColor -> c'b_STAT_COLOR
-    _              -> c'b_NONE
+cImageBlockType t
+  | t == BlockStatGrey  = c'b_STAT_GREY
+  | t == BlockStatColor = c'b_STAT_COLOR
+  | otherwise           = c'b_NONE
 
 hImageBlockType :: C'image_block_type -> ImageBlockType
-hImageBlockType t =
-  case t of
-    c'b_STAT_GREY  -> BlockStatGrey
-    c'b_STAT_COLOR -> BlockStatColor
-    _              -> BlockEmpty
+hImageBlockType t
+  | t == c'b_STAT_GREY  = BlockStatGrey
+  | t == c'b_STAT_COLOR = BlockStatColor
+  | otherwise           = BlockEmpty
 
 newtype Stat = Stat(Int, Int) deriving (Eq, Show)
 newtype Dir = Dir(Int, Int) deriving (Eq, Show)
@@ -76,43 +64,6 @@ newtype StatDir = StatDir(Stat, Dir) deriving (Eq, Show)
 newtype StatColor = StatColor(Stat, Stat, Stat) deriving (Eq, Show)
 newtype DirColor = DirColor(Dir, Dir, Dir) deriving (Eq, Show)
 newtype StatDirColor = StatDirColor(StatDir, StatDir, StatDir) deriving (Eq, Show)
-
-class ForestValue a where
-  type Origin a :: *
-  --cType :: * -> C'image_block_type
-  toValue :: Ptr(Origin a) -> IO (a)
-  fromPtr :: Ptr() -> IO (a)
-  fromPtr p = toValue $ ((castPtr p)::Ptr (Origin a))
-
---castForestValue :: (ForestValue b) => Ptr() -> Ptr (Origin b)
---castForestValue = castPtr
-
-instance ForestValue Stat where
-  type Origin Stat = C'stat_grey
-  --cType Stat = c'b_STAT_GREY
-  toValue p = do
-    C'stat_grey{
-      c'stat_grey'mean = m,
-      c'stat_grey'dev = d
-    } <- peek p
-    return Stat(fromIntegral m, fromIntegral d)
-
-instance ForestValue StatColor where
-  type Origin StatColor = C'stat_color
-  --cType StatColor = c'b_STAT_COLOR
-  toValue p = do
-    C'stat_color{
-      c'stat_color'mean_i = m,
-      c'stat_color'dev_i = d,
-      c'stat_color'mean_c1 = m1,
-      c'stat_color'dev_c1 = d1,
-      c'stat_color'mean_c2 = m2,
-      c'stat_color'dev_c2 = d2
-    } <- peek p
-    return StatColor(
-      Stat((fromIntegral m),(fromIntegral d)),
-      Stat((fromIntegral m1),(fromIntegral d1)),
-      Stat((fromIntegral m2),(fromIntegral d2)))
 
 instance NFData Stat where
   rnf (Stat(m,d)) = m `seq` d `seq` ()
