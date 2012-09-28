@@ -42,8 +42,10 @@ drawEdges eimg i =
 drawBlocks :: ImageForest Stat -> Image GrayScale D32 -> Image GrayScale D32
 drawBlocks (ImageForest ptr _ _ _ _ ts) i =
   i
-  <## [rectOp 1 1 r | r <- map toRect $ filter ((>10) . statDev . T.value) $ map block ts]
+  <## [rectOp 1 1 r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
   where
+    ds = map (statDev . T.value . block) ts
+    avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
 
 main = do
