@@ -44,33 +44,31 @@ data PixelType =
   deriving (Eq, Show)
 
 cPixelType :: PixelType -> C'pixel_type
-cPixelType t =
-  case t of
-    U8  -> c'p_U8
-    S8  -> c'p_S8
-    U16 -> c'p_U16
-    S16 -> c'p_S16
-    U32 -> c'p_U32
-    S32 -> c'p_S32
-    U64 -> c'p_U64
-    S64 -> c'p_S64
-    F32 -> c'p_F32
-    F64 -> c'p_F64
+cPixelType t
+  | t == U8  = c'p_U8
+  | t == S8  = c'p_S8
+  | t == U16 = c'p_U16
+  | t == S16 = c'p_S16
+  | t == U32 = c'p_U32
+  | t == S32 = c'p_S32
+  | t == U64 = c'p_U64
+  | t == S64 = c'p_S64
+  | t == F32 = c'p_F32
+  | t == F64 = c'p_F64
 
 hPixelType :: C'pixel_type -> PixelType
-hPixelType t =
-  case t of
-    c'p_U8   -> U8
-    c'p_S8   -> S8
-    c'p_U16  -> U16
-    c'p_S16  -> S16
-    c'p_U32  -> U32
-    c'p_S32  -> S32
-    c'p_U64  -> U64
-    c'p_S64  -> S64
-    c'p_F32  -> F32
-    c'p_F64  -> F64
-    --c'p_NONE -> U8
+hPixelType t
+  | t == c'p_U8  = U8
+  | t == c'p_S8  = S8
+  | t == c'p_U16 = U16
+  | t == c'p_S16 = S16
+  | t == c'p_U32 = U32
+  | t == c'p_S32 = S32
+  | t == c'p_U64 = U64
+  | t == c'p_S64 = S64
+  | t == c'p_F32 = F32
+  | t == c'p_F64 = F64
+  | otherwise    = U8
 
 valueConverter :: PixelType -> (Ptr() -> Int -> IO Float)
 valueConverter t =
