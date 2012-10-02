@@ -108,6 +108,12 @@ instance Functor ImageForest where
 class ForestValue a where
   checkType :: ImageForest a -> Bool
   toValue :: Ptr() -> IO (a)
+  getTree :: ImageForest a -> (Int,Int) -> IO (ImageTree a)
+  getTree f (x,y) =
+    withForeignPtr (forestPtr f) $ \pforest -> do
+      forest <- peek pforest
+      root <- peek $ advancePtr (c'image_tree_forest'roots forest) (y * (cols f) + x)
+      (treeFromPtr toValue) $ treePtrFromRoot root
   initForest :: PixelImage -> (Int,Int) -> IO (ImageForest a)
   createForest :: PixelImage -> (Int,Int) -> IO (ImageForest a)
   createForest i (w,h) = do

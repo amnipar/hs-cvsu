@@ -16,7 +16,99 @@ import Data.List
 import Data.Ord
 import Control.Monad
 
+import System.IO.Unsafe
+
 import Debug.Trace
+
+-- scan lines, compare to each line on the previous col
+-- if line is attached to another line, add an equivalence relation
+-- lines are stored in coordinate order, so could add some skipping logic?
+-- next, scan again and construct boxes by equivalence
+-- box contains a list of component id's; for each line, check if it is equivalent with one of them
+-- if it is, add to box, extending box dimensions
+
+-- initialize boxes from first col, assign component id's
+-- two box lists: 'finished' and 'unfinished', first one starts empty
+-- box has dimensions and last line that acts as 'interface' to that box
+-- scan lines, compare to each unfinished box, add to it 
+
+columnwiseBoxing :: Int -> [[(Int,Int,Int)]] -> [(Int,Int,Int,Int)]
+columnwiseBoxing s cs = (filter isGoodBox rt) ++ rb
+  where
+    (rb,rt) = foldr colscan ([],map initbox $ last cs) $ init cs
+    initbox (x,y1,y2) = (x,y1,x,y2)
+    isGoodBox (x1,y1,x2,y2) = (x2-x1 > s || y2-y1 > s) && x2-x1 < 36*s && y2 > 5*s && y1 < 30*s
+    colscan c (bs,ts) = (bs',nts)
+      where
+        nts = ts' ++ (filter ((flip notElem) ms) ns)
+        ((bs',ts'),(ns,ms)) = foldr growboxes ((bs,[]),(ts,[])) c
+    growboxes (x,y1,y2) ((bs,ts),(ns,ms))
+      | found == False = ((bs',(x,y1,x,y2):ts'),(ns',ms'))
+      | otherwise      = ((bs',ts'),(ns',ms'))
+      where
+        (((bs',ts'),(ns',ms')),(_,_,_,found)) = foldr scantemp (((bs,ts),(ns,ms)),(x,y1,y2,False)) ns
+    scantemp b@(bx1,by1,bx2,by2) (((bs,ts),(ns,ms)),(x,y1,y2,f))
+      | bx1-s > x && isGoodBox b = (((b:bs,ts),(ns,b:ms)),(x,y1,y2,f))
+      | bx1-s == x && by1 <= y2 && by2 >= y1 = (((bs,addBox ts),(ns,b:ms)),(x,y1,y2,True))
+      | otherwise = (((bs,ts),(ns,ms)),(x,y1,y2,f))
+      where
+        addBox ts
+          | bx2-x < 36*s && (null $ filter (isWithin (x,y1,y2)) ts) = (x,(min by1 y1),bx2,(max by2 y2)):ts
+          | otherwise = ts
+        isWithin (x,y1,y2) (bx1,by1,bx2,by2) = x == bx1 && y1 >= by1 && y2 <= by2
+
+columnwiseChanges :: ImageForest Stat -> [[(Int,Int,Int)]]
+columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
+  where
+    ds = map (statDev . T.value . block) ts
+    avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
+    toLine f (x,y) = liftM toL $ getTree f (x,y)
+      where
+        toL (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) =
+          ((round $ (e+w)/2, round n, round s),d) 
+    --toLine (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) = trace (show (w,n,e,s)) $
+    --  ((round $ (e+w)/2, round n, round s),d)
+    cols = map (unsafePerformIO . mapM (toLine f)) $! [[(x,y) | y <- [0..r-1]] | x <- [0..c-1]]
+    colChanges dt (cs,(c1@(x1,ya1,yb1),d1)) c@((x,ya,yb),d)
+      | d1 > dt && d > dt = (cs, ((x1,ya1,yb),d)) -- trace ("a"++show(x,ya1,yb1,ya,yb)) $
+      | d1 > dt && d <= dt = (c1:cs, c) -- trace ("b"++show(x,ya1,yb1,ya,yb)) $
+      | otherwise = (cs, c) -- trace ("c"++show(x,ya1,yb1,ya,yb)) $
+    getCol dt (cs,(c@(x,y1,y2),d))
+      | d > dt    = c:cs
+      | otherwise = cs
+    handleCol dt c = getCol dt $ foldl (colChanges dt) ([],head c) (tail c)
+    colLines = map (handleCol avgDev) cols
+
+joinBoxes :: Int -> [(Int,Int,Int,Int)] -> [(Int,Int,Int,Int)]
+joinBoxes s bs = combine bs
+  where
+    combine [] = []
+    combine (b:bs)
+      | isSmall b = (combine bs) ++ (newBox (b:(pick b bs)))
+      | isLong b = combine bs
+      | otherwise = (b:(combine bs))
+    dx (x1,_,x2,_) = x2-x1
+    dy (_,y1,_,y2) = y2-y1
+    isTooSmall b = dx b < 5*s || dy b < 5*s
+    isSmall b = dx b < 12*s || dy b < 6*s
+    isLong b = dy b < 8*s && dx b > 24*s
+    newBox (b:bs)
+      | isTooSmall nb = []
+      | isTooSmall b = [nb]
+      | otherwise = [b,nb]
+      where
+        nb = foldl accBounds b bs
+        accBounds (ax1,ay1,ax2,ay2) (bx1,by1,bx2,by2) =
+          ((min ax1 bx1),(min ay1 by1),(max ax2 bx2),(max ay2 by2))
+    pick _ [] = []
+    pick a@(ax1,ay1,ax2,ay2) (b@(bx1,by1,bx2,by2):bs)
+      | w >= 12*s && w <= 36*s && h >= 6*s && h <= 12*s = [b]
+      | w > 36*s = []
+      | h > 12*s = pick a bs
+      | otherwise = b:(pick a bs)
+      where
+        w = bx2-ax1
+        h = (max by2 ay2)-(min by1 ay1)
 
 createFromPixels :: Int -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
 createFromPixels w h ps = do
@@ -28,6 +120,18 @@ createFromPixels w h ps = do
         maxV = maximum $ map snd ps
         sp i ((x,y),v) = setPixel (x,y) v i
         --i = imageFromFunction (w,h) (const 0)
+
+drawChanges :: [[(Int,Int,Int)]] -> Image GrayScale D32 -> Image GrayScale D32
+drawChanges ls i =
+  i
+  <## concat [[lineOp 1 1 (x,y1) (x,y2) | (x,y1,y2) <- cs] | cs <- ls]
+
+drawBoxes :: Int -> [(Int,Int,Int,Int)] -> Image GrayScale D32 -> Image GrayScale D32
+drawBoxes dx bs i =
+  i
+  <## [rectOp 1 1 r | r <- map (toRect dx) bs]
+  where
+    toRect dx (x1,y1,x2,y2) = mkRectangle (x1-dx,y1) (x2-x1+2*dx,y2-y1)
 
 drawEdges :: EdgeImage -> Image GrayScale D32 -> Image GrayScale D32
 drawEdges eimg i =
@@ -49,10 +153,16 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
     toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
 
 main = do
-  pimg <- readPixelImage "smallLena.jpg"
+  img <- readFromFile "rengas.jpg"
+  pimg <- readPixelImage "rengas.jpg"
   --withPixelImage pimg $ \i -> do
-  eimg <- createEdgeImage 8 8 8 8 8 4 pimg
-  forest <- createForest pimg (8,8)
-  ps <- CVSU.getAllPixels pimg
-  nimg <- createFromPixels (width pimg) (height pimg) ps
-  saveImage "result.png" $ drawBlocks forest $ drawEdges eimg nimg
+  --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
+  forest <- createForest pimg (6,6)
+  --ps <- CVSU.getAllPixels pimg
+  --nimg <- createFromPixels (width pimg) (height pimg) ps
+  let 
+    cs = columnwiseChanges forest
+    bs = joinBoxes 6 $ columnwiseBoxing 6 cs
+  saveImage "result.png" $ drawBoxes 3 bs $ drawChanges cs img -- drawChanges cs $ drawBlocks forest
+  
+  --drawBlocks forest $ drawEdges eimg nimg
