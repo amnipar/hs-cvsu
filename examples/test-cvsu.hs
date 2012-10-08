@@ -30,7 +30,7 @@ import Debug.Trace
 -- initialize boxes from first col, assign component id's
 -- two box lists: 'finished' and 'unfinished', first one starts empty
 -- box has dimensions and last line that acts as 'interface' to that box
--- scan lines, compare to each unfinished box, add to it 
+-- scan lines, compare to each unfinished box, add to it
 
 columnwiseBoxing :: Int -> [[(Int,Int,Int)]] -> [(Int,Int,Int,Int)]
 columnwiseBoxing s cs = (filter isGoodBox rt) ++ rb
@@ -57,6 +57,48 @@ columnwiseBoxing s cs = (filter isGoodBox rt) ++ rb
           | otherwise = ts
         isWithin (x,y1,y2) (bx1,by1,bx2,by2) = x == bx1 && y1 >= by1 && y2 <= by2
 
+
+-- read cols one by one
+-- assign id (carry previous id in a parameter)
+-- compare with all stripes of previous col
+-- if equal, add equivalence to relation list
+-- need to know:
+--  *last id
+--  *stripes in previous col
+--  *next stripe
+stripeEquivalences :: [[(Int,Int,Int)]] -> ([(Int,Int)],[(Int,(Int,Int,Int))])
+stripeEquivalences cs = (finalEqs,finalStripes)
+  where
+    (initId,initEq,initStripes) = foldl addStripe (0,[],[]) (head cs)
+    (_,finalEqs,finalStripes,_) = foldl handleCol (initId,initEq,[],initStripes) (tail cs)
+    addStripe (lastId,eqs,stripes) stripe = (lastId+1,eqs,stripes:(currentId+1,stripe))
+    addEquivalence eqs ((aid,a),(bid,b))
+      | isEquivalent a b = eqs:(aid,bid)
+      | otherwise = eqs
+    isEquivalent (_,ay1,ay2) (_,by1,by2) = (by1 <= ay2) && (by2 >= ay1)
+    handleCol (lastId,eqs,stripes,lastStripes) col = (newLastId,newEqs,stripes++lastStripes,newStripes)
+      (newLastId,_,newStripes) = foldl addStripe (lastId,eqs,[]) col
+      newEqs = foldl addEquivalence eqs pairs
+      pairs = [(a,b) | a <- lastStripes, b <- newStripes]
+
+-- check stripes one by one
+-- compare id to list of id's in each box
+-- if id matches, add to list of id's, add to list of stripes, increase bounding box
+-- when first match is found, search should be terminated -> make own recursion
+-- add new box always to beginning of list, so search terminates sooner
+-- need to carry around the previous list and remaining list and then concatenate?
+equivalenceComponents :: ([(Int,Int)],[(Int,(Int,Int,Int))]) -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))]
+  where
+        findComponent eqs (sid,s) cas (((x,y,w,h),(ids,stripes)):cbs)
+
+
+equivalenceBoxes :: ([(Int,Int)],[(Int,(Int,Int,Int))]) -> [(Int,Int,Int,Int)]
+equivalenceBoxes (eqs,stripes) = map fst $ equivalenceComponents (eqs,stripes)
+
+-- for each stripe in previous col
+-- check every stripe in current col
+-- if they are equivalent, add equivalence relation
+
 columnwiseChanges :: ImageForest Stat -> [[(Int,Int,Int)]]
 columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
   where
@@ -65,7 +107,7 @@ columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
     toLine f (x,y) = liftM toL $ getTree f (x,y)
       where
         toL (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) =
-          ((round $ (e+w)/2, round n, round s),d) 
+          ((round $ (e+w)/2, round n, round s),d)
     --toLine (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) = trace (show (w,n,e,s)) $
     --  ((round $ (e+w)/2, round n, round s),d)
     cols = map (unsafePerformIO . mapM (toLine f)) $! [[(x,y) | y <- [0..r-1]] | x <- [0..c-1]]
@@ -160,9 +202,9 @@ main = do
   forest <- createForest pimg (6,6)
   --ps <- CVSU.getAllPixels pimg
   --nimg <- createFromPixels (width pimg) (height pimg) ps
-  let 
+  let
     cs = columnwiseChanges forest
     bs = joinBoxes 6 $ columnwiseBoxing 6 cs
   saveImage "result.png" $ drawBoxes 3 bs $ drawChanges cs img -- drawChanges cs $ drawBlocks forest
-  
+
   --drawBlocks forest $ drawEdges eimg nimg
