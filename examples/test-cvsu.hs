@@ -71,15 +71,16 @@ stripeEquivalences cs = (finalEqs,finalStripes)
   where
     (initId,initEq,initStripes) = foldl addStripe (0,[],[]) (head cs)
     (_,finalEqs,finalStripes,_) = foldl handleCol (initId,initEq,[],initStripes) (tail cs)
-    addStripe (lastId,eqs,stripes) stripe = (lastId+1,eqs,stripes:(currentId+1,stripe))
+    addStripe (lastId,eqs,stripes) stripe = (lastId+1,eqs,((lastId+1,stripe):stripes))
     addEquivalence eqs ((aid,a),(bid,b))
-      | isEquivalent a b = eqs:(aid,bid)
+      | isEquivalent a b = ((aid,bid):eqs)
       | otherwise = eqs
     isEquivalent (_,ay1,ay2) (_,by1,by2) = (by1 <= ay2) && (by2 >= ay1)
     handleCol (lastId,eqs,stripes,lastStripes) col = (newLastId,newEqs,stripes++lastStripes,newStripes)
-      (newLastId,_,newStripes) = foldl addStripe (lastId,eqs,[]) col
-      newEqs = foldl addEquivalence eqs pairs
-      pairs = [(a,b) | a <- lastStripes, b <- newStripes]
+      where
+        (newLastId,_,newStripes) = foldl addStripe (lastId,eqs,[]) col
+        newEqs = foldl addEquivalence eqs pairs
+        pairs = [(a,b) | a <- lastStripes, b <- newStripes]
 
 -- check stripes one by one
 -- compare id to list of id's in each box
@@ -88,9 +89,27 @@ stripeEquivalences cs = (finalEqs,finalStripes)
 -- add new box always to beginning of list, so search terminates sooner
 -- need to carry around the previous list and remaining list and then concatenate?
 equivalenceComponents :: ([(Int,Int)],[(Int,(Int,Int,Int))]) -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))]
+equivalenceComponents (eqs,stripes) = foldl (addComponents eqs) [] stripes
   where
-        findComponent eqs (sid,s) cas (((x,y,w,h),(ids,stripes)):cbs)
-
+    addComponents :: [(Int,Int)] -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))] -> (Int,(Int,Int,Int)) -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))]
+    addComponents eqs cs s = findComponent eqs s [] cs
+    sortedEqs = sortBy (comparing fst) eqs
+    -- stop the recursion when the equivalence list is exhausted
+    findEq [] _ _ = False
+    findEq ((e1,e2):eqs) a1 a2
+      -- if id's match either way, there is an equivalence
+      | (a1 == e1 && a2 == e2) || (a2 == e1 && a1 == e2) = True
+      -- if both comparison id's are larger, we won't find an equivalence here
+      | (e1 > a1) && (e1 > a2) && (e2 > a1) && (e2 > a2) = False
+      -- otherwise compare reqursion
+      | otherwise = findEq eqs a1 a2
+    findComponent _ s _ [] = [initComponent s]
+    findComponent eqs s@(sid,_) cas (c@(_,(ids,_)):cbs)
+      | not $ null $ filter (findEq eqs sid) ids = (expandComponent c s):(cas ++ cbs)
+      | otherwise = findComponent eqs s (cas ++ [c]) cbs
+    initComponent (sid,s@(sx,sy1,sy2)) = ((sx,sy1,sx,sy2),([sid],[s]))
+    expandComponent ((x1,y1,x2,y2),(ids,stripes)) (sid,s@(sx,sy1,sy2)) =
+      (((min x1 sx),(min y1 sy1),(max x2 sx),(max y2 sy2)),(sid:ids,s:stripes))
 
 equivalenceBoxes :: ([(Int,Int)],[(Int,(Int,Int,Int))]) -> [(Int,Int,Int,Int)]
 equivalenceBoxes (eqs,stripes) = map fst $ equivalenceComponents (eqs,stripes)
@@ -204,7 +223,8 @@ main = do
   --nimg <- createFromPixels (width pimg) (height pimg) ps
   let
     cs = columnwiseChanges forest
-    bs = joinBoxes 6 $ columnwiseBoxing 6 cs
+    bs = equivalenceBoxes $ stripeEquivalences cs
+    --bs = joinBoxes 6 $ columnwiseBoxing 6 cs
   saveImage "result.png" $ drawBoxes 3 bs $ drawChanges cs img -- drawChanges cs $ drawBlocks forest
 
   --drawBlocks forest $ drawEdges eimg nimg
