@@ -15,6 +15,7 @@ import Data.Function
 import Data.List
 import Data.Ord
 import Control.Monad
+import ReadArgs
 
 import System.IO.Unsafe
 
@@ -57,6 +58,11 @@ columnwiseBoxing s cs = (filter isGoodBox rt) ++ rb
           | otherwise = ts
         isWithin (x,y1,y2) (bx1,by1,bx2,by2) = x == bx1 && y1 >= by1 && y2 <= by2
 
+data Stripe =
+  Stripe
+  { sid :: !Int
+  , coords :: !(Int,Int,Int)
+  }
 
 -- read cols one by one
 -- assign id (carry previous id in a parameter)
@@ -66,20 +72,23 @@ columnwiseBoxing s cs = (filter isGoodBox rt) ++ rb
 --  *last id
 --  *stripes in previous col
 --  *next stripe
-stripeEquivalences :: [[(Int,Int,Int)]] -> ([(Int,Int)],[(Int,(Int,Int,Int))])
+stripeEquivalences :: [[(Int,Int,Int)]] -> ([(Int,Int)],[Stripe])
 stripeEquivalences cs = (finalEqs,finalStripes)
   where
     (initId,initEq,initStripes) = foldl addStripe (0,[],[]) (head cs)
     (_,finalEqs,finalStripes,_) = foldl handleCol (initId,initEq,[],initStripes) (tail cs)
-    addStripe (lastId,eqs,stripes) stripe = (lastId+1,eqs,((lastId+1,stripe):stripes))
-    addEquivalence eqs ((aid,a),(bid,b))
+    addStripe (lastId,eqs,stripes) stripe = newId `seq` (newId,eqs,((Stripe newId stripe):stripes))
+      where
+        newId = lastId + 1
+    addEquivalence eqs ((Stripe aid a),(Stripe bid b))
       | isEquivalent a b = ((aid,bid):eqs)
       | otherwise = eqs
     isEquivalent (_,ay1,ay2) (_,by1,by2) = (by1 <= ay2) && (by2 >= ay1)
-    handleCol (lastId,eqs,stripes,lastStripes) col = (newLastId,newEqs,stripes++lastStripes,newStripes)
+    handleCol (lastId,eqs,stripes,lastStripes) col = 
+      (newLastId,eqs++newEqs,stripes++(sortBy (comparing sid) lastStripes),newStripes)
       where
         (newLastId,_,newStripes) = foldl addStripe (lastId,eqs,[]) col
-        newEqs = foldl addEquivalence eqs pairs
+        newEqs = foldl addEquivalence [] pairs
         pairs = [(a,b) | a <- lastStripes, b <- newStripes]
 
 -- check stripes one by one
@@ -88,11 +97,11 @@ stripeEquivalences cs = (finalEqs,finalStripes)
 -- when first match is found, search should be terminated -> make own recursion
 -- add new box always to beginning of list, so search terminates sooner
 -- need to carry around the previous list and remaining list and then concatenate?
-equivalenceComponents :: ([(Int,Int)],[(Int,(Int,Int,Int))]) -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))]
-equivalenceComponents (eqs,stripes) = foldl (addComponents eqs) [] stripes
+equivalenceComponents :: Int -> ([(Int,Int)],[Stripe]) -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))]
+equivalenceComponents d (eqs,stripes) = completed ++ active
   where
-    addComponents :: [(Int,Int)] -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))] -> (Int,(Int,Int,Int)) -> [((Int,Int,Int,Int),([Int],[(Int,Int,Int)]))]
-    addComponents eqs cs s = findComponent eqs s [] cs
+    (_,completed,active) = foldl addComponents (eqs,[],[]) stripes
+    addComponents (eqs,cc,ac) s = findComponent s (eqs,cc,ac)
     sortedEqs = sortBy (comparing fst) eqs
     -- stop the recursion when the equivalence list is exhausted
     findEq [] _ _ = False
@@ -103,16 +112,38 @@ equivalenceComponents (eqs,stripes) = foldl (addComponents eqs) [] stripes
       | (e1 > a1) && (e1 > a2) && (e2 > a1) && (e2 > a2) = False
       -- otherwise compare reqursion
       | otherwise = findEq eqs a1 a2
-    findComponent _ s _ [] = [initComponent s]
-    findComponent eqs s@(sid,_) cas (c@(_,(ids,_)):cbs)
-      | not $ null $ filter (findEq eqs sid) ids = (expandComponent c s):(cas ++ cbs)
-      | otherwise = findComponent eqs s (cas ++ [c]) cbs
-    initComponent (sid,s@(sx,sy1,sy2)) = ((sx,sy1,sx,sy2),([sid],[s]))
-    expandComponent ((x1,y1,x2,y2),(ids,stripes)) (sid,s@(sx,sy1,sy2)) =
-      (((min x1 sx),(min y1 sy1),(max x2 sx),(max y2 sy2)),(sid:ids,s:stripes))
+    -- return both eqs and bool.
+    -- findEq should return the pruned list of eqs; too small id's are removed.
+    isEq _ _ [] = False
+    isEq eqs sid1 (sid2:ids)
+      | findEq eqs sid1 sid2 = True
+      | otherwise = isEq eqs sid1 ids
+    pruneEq [] _ = []
+    pruneEq eqs@((e1,e2):es) sid
+      | (e1 < sid) && (e2 < sid) = pruneEq es sid
+      | otherwise = eqs
+    -- return list of completed and active components.
+    findComponent s@(Stripe sid _) (eqs,cc,[]) = ((pruneEq eqs sid),cc,[initComponent s])
+    findComponent s@(Stripe sid (sx,_,_)) (eqs,cc,(c@((_,_,cx,_),(ids,_)):ac))
+      | isEq eqs sid ids = ((pruneEq eqs sid),cc,(consIfSizeOk (expandComponent c s) ac))
+      | cx + d < sx = findComponent s (eqs,c:cc, ac)
+      | otherwise = nextCC c
+      where
+        consIfSizeOk c@((x1,y1,x2,y2),_) cs
+          | (x2-x1) > d*60 = cs
+          | (y2-y1) > d*20 = cs
+          | otherwise = (c:cs)
+        nextCC c = (es,nc,c:na)
+          where (es,nc,na) = findComponent s (eqs,cc,ac)
+    initComponent (Stripe sid s@(sx,sy1,sy2)) = ((sx,sy1,sx+d,sy2),([sid],[s]))
+    expandComponent ((x1,y1,x2,y2),(ids,stripes)) (Stripe sid s@(sx,sy1,sy2)) =
+      (((min x1 sx),(min y1 sy1),(max x2 (sx+d)),(max y2 sy2)),(sid:ids,s:stripes))
 
-equivalenceBoxes :: ([(Int,Int)],[(Int,(Int,Int,Int))]) -> [(Int,Int,Int,Int)]
-equivalenceBoxes (eqs,stripes) = map fst $ equivalenceComponents (eqs,stripes)
+equivalenceBoxes :: Int -> ([(Int,Int)],[Stripe]) -> [(Int,Int,Int,Int)]
+equivalenceBoxes d (eqs,stripes) =
+  filter sizeLimit $ map fst $ equivalenceComponents d (eqs,stripes)
+    where
+      sizeLimit (x1,y1,x2,y2) = (x2-x1) > 2*d || (y2-y1) > 3*d
 
 -- for each stripe in previous col
 -- check every stripe in current col
@@ -122,11 +153,11 @@ columnwiseChanges :: ImageForest Stat -> [[(Int,Int,Int)]]
 columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
   where
     ds = map (statDev . T.value . block) ts
-    avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
+    avgDev = ceiling $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toLine f (x,y) = liftM toL $ getTree f (x,y)
       where
         toL (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) =
-          ((round $ (e+w)/2, round n, round s),d)
+          ((round $ w, round n, round s),d)
     --toLine (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) = trace (show (w,n,e,s)) $
     --  ((round $ (e+w)/2, round n, round s),d)
     cols = map (unsafePerformIO . mapM (toLine f)) $! [[(x,y) | y <- [0..r-1]] | x <- [0..c-1]]
@@ -145,14 +176,14 @@ joinBoxes s bs = combine bs
   where
     combine [] = []
     combine (b:bs)
-      | isSmall b = (combine bs) ++ (newBox (b:(pick b bs)))
+      | isSmall b = (newBox (b:(pick b bs))) ++ (combine bs)
       | isLong b = combine bs
       | otherwise = (b:(combine bs))
     dx (x1,_,x2,_) = x2-x1
     dy (_,y1,_,y2) = y2-y1
     isTooSmall b = dx b < 5*s || dy b < 5*s
-    isSmall b = dx b < 12*s || dy b < 6*s
-    isLong b = dy b < 8*s && dx b > 24*s
+    isSmall b = dx b < 8*s || dy b < 8*s
+    isLong b = dy b < 8*s && dx b > 60*s
     newBox (b:bs)
       | isTooSmall nb = []
       | isTooSmall b = [nb]
@@ -163,9 +194,9 @@ joinBoxes s bs = combine bs
           ((min ax1 bx1),(min ay1 by1),(max ax2 bx2),(max ay2 by2))
     pick _ [] = []
     pick a@(ax1,ay1,ax2,ay2) (b@(bx1,by1,bx2,by2):bs)
-      | w >= 12*s && w <= 36*s && h >= 6*s && h <= 12*s = [b]
-      | w > 36*s = []
-      | h > 12*s = pick a bs
+      | w >= 12*s && w <= 60*s && h >= 8*s && h <= 14*s = [b]
+      | w > 60*s = []
+      | h > 14*s = pick a bs
       | otherwise = b:(pick a bs)
       where
         w = bx2-ax1
@@ -182,17 +213,17 @@ createFromPixels w h ps = do
         sp i ((x,y),v) = setPixel (x,y) v i
         --i = imageFromFunction (w,h) (const 0)
 
-drawChanges :: [[(Int,Int,Int)]] -> Image GrayScale D32 -> Image GrayScale D32
+drawChanges :: [[(Int,Int,Int)]] -> Image RGB D32 -> Image RGB D32
 drawChanges ls i =
   i
-  <## concat [[lineOp 1 1 (x,y1) (x,y2) | (x,y1,y2) <- cs] | cs <- ls]
+  <## concat [[lineOp (1,0,0) 1 (x,y1) (x,y2) | (x,y1,y2) <- cs] | cs <- ls]
 
-drawBoxes :: Int -> [(Int,Int,Int,Int)] -> Image GrayScale D32 -> Image GrayScale D32
-drawBoxes dx bs i =
+drawBoxes :: (Float,Float,Float) -> [(Int,Int,Int,Int)] -> Image RGB D32 -> Image RGB D32
+drawBoxes c bs i = trace (show $ length bs) $
   i
-  <## [rectOp 1 1 r | r <- map (toRect dx) bs]
+  <## [rectOp c 1 r | r <- map toRect bs]
   where
-    toRect dx (x1,y1,x2,y2) = mkRectangle (x1-dx,y1) (x2-x1+2*dx,y2-y1)
+    toRect (x1,y1,x2,y2) = mkRectangle (x1,y1) (x2-x1,y2-y1)
 
 drawEdges :: EdgeImage -> Image GrayScale D32 -> Image GrayScale D32
 drawEdges eimg i =
@@ -213,18 +244,24 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
     avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
 
+--drawRects :: [R.Rectangle Int] -> Image 
+
 main = do
-  img <- readFromFile "rengas.jpg"
-  pimg <- readPixelImage "rengas.jpg"
+  (sourceFile,targetFile) <- readArgs
+  img :: Image RGB D32 <- readFromFile sourceFile
+  pimg <- readPixelImage sourceFile
   --withPixelImage pimg $ \i -> do
   --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
-  forest <- createForest pimg (6,6)
+  forest <- createForest pimg (5,5)
   --ps <- CVSU.getAllPixels pimg
   --nimg <- createFromPixels (width pimg) (height pimg) ps
   let
+    left (x1,_,_,_) = x1
+    top (_,y1,_,_) = y1
     cs = columnwiseChanges forest
-    bs = equivalenceBoxes $ stripeEquivalences cs
-    --bs = joinBoxes 6 $ columnwiseBoxing 6 cs
-  saveImage "result.png" $ drawBoxes 3 bs $ drawChanges cs img -- drawChanges cs $ drawBlocks forest
-
+    bs = equivalenceBoxes 5 $ stripeEquivalences cs
+    bs2 = joinBoxes 5 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
+  saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $ 
+    drawChanges cs img -- drawChanges cs $ drawBlocks forest
+-- drawBoxes 3 bs $ 
   --drawBlocks forest $ drawEdges eimg nimg
