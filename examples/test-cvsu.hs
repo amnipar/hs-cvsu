@@ -3,7 +3,7 @@ module Main where
 
 import CVSU.Types
 import CVSU.PixelImage as CVSU
-import CVSU.IntegralImage
+import CVSU.Integral
 import CVSU.ImageTree as T
 import CVSU.Edges as E
 import CV.Image
@@ -16,10 +16,11 @@ import Data.Function
 import Data.List
 import Data.Ord
 import Control.Monad
+import Control.Applicative
 import ReadArgs
 
 import System.IO.Unsafe
-
+import GHC.Float
 import Debug.Trace
 
 -- scan lines, compare to each line on the previous col
@@ -248,11 +249,12 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
 meanFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanFilter pimg r = do
   int <- createIntegralImage pimg
-  createFromPixels w h $ map (integralMeanByRadius int r) cs
+  vs <- mapM (liftM double2Float <$> integralMeanByRadius int r) cs
+  createFromPixels w h $ zip cs vs
   where
         w = width pimg
         h = height pimg
-        cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+        cs = [(x,y) | x <- [r+1..w-r-2], y <- [r+1..h-r-2]]
 
 --drawRects :: [R.Rectangle Int] -> Image
 
@@ -260,6 +262,7 @@ main = do
   (sourceFile,targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
+  mimg <- meanFilter pimg 4
   --withPixelImage pimg $ \i -> do
   --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
   forest <- createForest pimg (5,5)
@@ -271,6 +274,7 @@ main = do
     cs = columnwiseChanges forest
     bs = equivalenceBoxes 5 $ stripeEquivalences cs
     bs2 = joinBoxes 5 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
+  saveImage "mean.png" mimg
   saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $
     drawChanges cs img -- drawChanges cs $ drawBlocks forest
 -- drawBoxes 3 bs $

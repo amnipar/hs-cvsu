@@ -36,15 +36,19 @@ createIntegralImage img = do
   fint <- allocIntegralImage
   withForeignPtr (imagePtr img) $ \pimg ->
     withForeignPtr fint $ \pint -> do
-      r <- c'integral_image_create pint pimg
-      if r /= c'SUCCESS
+      r1 <- c'integral_image_create pint pimg
+      if r1 /= c'SUCCESS
         then error "Creating integral image failed"
         else do
-          C'integral_image{
-            c'integral_image'width = w,
-            c'integral_image'height = h
-          } <- peek pint
-          return $ IntegralImage fint img (fromIntegral w) (fromIntegral h)
+          r2 <- c'integral_image_update pint
+          if r2 /= c'SUCCESS
+            then error "Updating integral image failed"
+            else do
+              C'integral_image{
+                c'integral_image'width = w,
+                c'integral_image'height = h
+              } <- peek pint
+              return $ IntegralImage fint img (fromIntegral w) (fromIntegral h)
 
 integralMeanByRect :: IntegralImage -> (Int,Int) -> (Int,Int) -> IO (Double)
 integralMeanByRect int (x,y) (w,h) =
@@ -53,6 +57,6 @@ integralMeanByRect int (x,y) (w,h) =
       (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
 
 integralMeanByRadius :: IntegralImage -> Int -> (Int,Int) -> IO (Double)
-integralMeanByRadius int (cx,cy) r = integralMeanByRect int (cx-r,cy-r) (cx+r,cy+r)
+integralMeanByRadius int r (cx,cy) = integralMeanByRect int (cx-r,cy-r) (cx+r,cy+r)
 
 --integralStatisticsByRect :: IntegralImage -> (Int,Int) -> (Int,Int) -> Statistics
