@@ -3,6 +3,7 @@ module Main where
 
 import CVSU.Types
 import CVSU.PixelImage as CVSU
+import CVSU.IntegralImage
 import CVSU.ImageTree as T
 import CVSU.Edges as E
 import CV.Image
@@ -84,7 +85,7 @@ stripeEquivalences cs = (finalEqs,finalStripes)
       | isEquivalent a b = ((aid,bid):eqs)
       | otherwise = eqs
     isEquivalent (_,ay1,ay2) (_,by1,by2) = (by1 <= ay2) && (by2 >= ay1)
-    handleCol (lastId,eqs,stripes,lastStripes) col = 
+    handleCol (lastId,eqs,stripes,lastStripes) col =
       (newLastId,eqs++newEqs,stripes++(sortBy (comparing sid) lastStripes),newStripes)
       where
         (newLastId,_,newStripes) = foldl addStripe (lastId,eqs,[]) col
@@ -244,7 +245,16 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
     avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
 
---drawRects :: [R.Rectangle Int] -> Image 
+meanFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
+meanFilter pimg r = do
+  int <- createIntegralImage pimg
+  createFromPixels w h $ map (integralMeanByRadius int r) cs
+  where
+        w = width pimg
+        h = height pimg
+        cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+
+--drawRects :: [R.Rectangle Int] -> Image
 
 main = do
   (sourceFile,targetFile) <- readArgs
@@ -261,7 +271,7 @@ main = do
     cs = columnwiseChanges forest
     bs = equivalenceBoxes 5 $ stripeEquivalences cs
     bs2 = joinBoxes 5 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
-  saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $ 
+  saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $
     drawChanges cs img -- drawChanges cs $ drawBlocks forest
--- drawBoxes 3 bs $ 
+-- drawBoxes 3 bs $
   --drawBlocks forest $ drawEdges eimg nimg

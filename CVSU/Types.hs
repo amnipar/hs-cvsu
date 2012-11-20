@@ -3,6 +3,7 @@ module CVSU.Types
 ( ImageBlockType(..)
 , cImageBlockType
 , hImageBlockType
+, Statistics(..)
 , Stat(..)
 , Dir(..)
 , StatDir(..)
@@ -57,6 +58,12 @@ hImageBlockType t
   | t == c'b_STAT_GREY  = BlockStatGrey
   | t == c'b_STAT_COLOR = BlockStatColor
   | otherwise           = BlockEmpty
+
+data Statistics =
+  Statistics
+  { mean :: Double
+  , variance :: Double
+  } deriving Eq
 
 newtype Stat = Stat(Int, Int) deriving (Eq, Show)
 newtype Dir = Dir(Int, Int) deriving (Eq, Show)

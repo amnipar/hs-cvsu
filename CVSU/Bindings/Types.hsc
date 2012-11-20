@@ -122,6 +122,13 @@ import Foreign.Ptr
 #field v , CShort
 #stoptype
 
+-- statistics type
+
+#starttype statistics
+#field mean , CDouble
+#field variance , CDouble
+#stoptype
+
 -- stat grey type
 
 #starttype stat_grey

@@ -20,6 +20,7 @@ Library
   Exposed-modules:
     CVSU.Types
     CVSU.PixelImage
+    CVSU.Integral
     CVSU.Edges
     CVSU.ImageTree
   Other-Modules:
@@ -39,7 +40,7 @@ Library
     deepseq >= 1.1.0.2,
     CV >= 0.3.6.2
   Include-dirs:
-    c_cvsu
+    c
     /usr/include/opencv
   Extra-libraries:
     opencv_calib3d,
@@ -53,42 +54,42 @@ Library
     opencv_objdetect,
     opencv_video
   Includes:
-    c_cvsu/cvsu_config.h,
-    c_cvsu/cvsu_macros.h,
-    c_cvsu/cvsu_memory.h,
-    c_cvsu/cvsu_output.h,
-    c_cvsu/cvsu_types.h,
-    c_cvsu/cvsu_basic.h,
-    c_cvsu/cvsu_filter.h,
-    c_cvsu/cvsu_edges.h,
-    c_cvsu/cvsu_opencv.h,
-    c_cvsu/cvsu_integral.h,
-    c_cvsu/cvsu_list.h,
-    c_cvsu/cvsu_image_tree.h
+    c/cvsu_config.h,
+    c/cvsu_macros.h,
+    c/cvsu_memory.h,
+    c/cvsu_output.h,
+    c/cvsu_types.h,
+    c/cvsu_basic.h,
+    c/cvsu_filter.h,
+    c/cvsu_edges.h,
+    c/cvsu_opencv.h,
+    c/cvsu_integral.h,
+    c/cvsu_list.h,
+    c/cvsu_image_tree.h
   Install-includes:
-    c_cvsu/cvsu_config.h,
-    c_cvsu/cvsu_macros.h,
-    c_cvsu/cvsu_memory.h,
-    c_cvsu/cvsu_output.h,
-    c_cvsu/cvsu_types.h,
-    c_cvsu/cvsu_basic.h,
-    c_cvsu/cvsu_filter.h,
-    c_cvsu/cvsu_edges.h,
-    c_cvsu/cvsu_opencv.h,
-    c_cvsu/cvsu_integral.h,
-    c_cvsu/cvsu_list.h,
-    c_cvsu/cvsu_image_tree.h
+    c/cvsu_config.h,
+    c/cvsu_macros.h,
+    c/cvsu_memory.h,
+    c/cvsu_output.h,
+    c/cvsu_types.h,
+    c/cvsu_basic.h,
+    c/cvsu_filter.h,
+    c/cvsu_edges.h,
+    c/cvsu_opencv.h,
+    c/cvsu_integral.h,
+    c/cvsu_list.h,
+    c/cvsu_image_tree.h
   C-sources:
-    c_cvsu/cvsu_memory.c,
-    c_cvsu/cvsu_output.c,
-    c_cvsu/cvsu_types.c,
-    c_cvsu/cvsu_basic.c,
-    c_cvsu/cvsu_filter.c,
-    c_cvsu/cvsu_edges.c,
-    c_cvsu/cvsu_opencv.c,
-    c_cvsu/cvsu_integral.c,
-    c_cvsu/cvsu_list.c,
-    c_cvsu/cvsu_image_tree.c
+    c/cvsu_memory.c,
+    c/cvsu_output.c,
+    c/cvsu_types.c,
+    c/cvsu_basic.c,
+    c/cvsu_filter.c,
+    c/cvsu_edges.c,
+    c/cvsu_opencv.c,
+    c/cvsu_integral.c,
+    c/cvsu_list.c,
+    c/cvsu_image_tree.c
 
 source-repository head
   type:     git
