@@ -208,11 +208,11 @@ createFromPixels :: Int -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32
 createFromPixels w h ps = do
   i <- create (w,h)
   mapM_ (sp i) ps
-  return $ stretchHistogram i
+  return i
   where
         minV = minimum $ map snd ps
         maxV = maximum $ map snd ps
-        sp i ((x,y),v) = setPixel (x,y) v i
+        sp i ((x,y),v) = setPixel (x,y) (v/maxV) i
         --i = imageFromFunction (w,h) (const 0)
 
 drawChanges :: [[(Int,Int,Int)]] -> Image RGB D32 -> Image RGB D32
@@ -246,15 +246,41 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
     avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
 
+drawRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
+drawRegions (w,h) s rs = do
+  i <- create (w*s,h*s)
+  return $
+    i <## [rectOp (v/maxV) (-1) (mkRectangle (x*s,y*s) (s,s)) | ((x,y),v) <- rs]
+  where
+    maxV = maximum $ map snd rs
+
 meanFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanFilter pimg r = do
   int <- createIntegralImage pimg
-  vs <- mapM (liftM double2Float <$> integralMeanByRadius int r) cs
-  createFromPixels w h $ zip cs vs
+  vs <- mapM (values int r) cs
+  createFromPixels w h vs
   where
         w = width pimg
         h = height pimg
-        cs = [(x,y) | x <- [r+1..w-r-2], y <- [r+1..h-r-2]]
+        cs = [(x,y) | x <- [r..w-r-1], y <- [r..h-r-1]]
+        values int r (x,y) = do
+          v <- integralMeanByRadius int r (x,y)
+          return ((x,y),double2Float v)
+
+meanRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
+meanRegions pimg r = do
+  int <- createIntegralImage pimg
+  rs <- mapM (regions int r) cs
+  drawRegions (w',h') r rs
+  where
+    w = width pimg
+    h = height pimg
+    w' = w `div` r
+    h' = h `div` r
+    cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
+    regions int r (x,y) = do
+      v <- integralMeanByRect int (x*r,y*r) (r,r)
+      return ((x,y),double2Float v)
 
 --drawRects :: [R.Rectangle Int] -> Image
 
@@ -262,7 +288,7 @@ main = do
   (sourceFile,targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
-  mimg <- meanFilter pimg 4
+  mimg <- meanFilter pimg 3
   --withPixelImage pimg $ \i -> do
   --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
   forest <- createForest pimg (5,5)
