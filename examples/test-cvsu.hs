@@ -262,7 +262,7 @@ meanFilter pimg r = do
   where
         w = width pimg
         h = height pimg
-        cs = [(x,y) | x <- [r..w-r-1], y <- [r..h-r-1]]
+        cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
         values int r (x,y) = do
           v <- integralMeanByRadius int r (x,y)
           return ((x,y),double2Float v)
@@ -289,18 +289,21 @@ main = do
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
   mimg <- meanFilter pimg 3
+  rimg <- meanRegions pimg 5
   --withPixelImage pimg $ \i -> do
   --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
   forest <- createForest pimg (5,5)
-  --ps <- CVSU.getAllPixels pimg
-  --nimg <- createFromPixels (width pimg) (height pimg) ps
+  ps <- CVSU.getAllPixels pimg
+  nimg <- createFromPixels (width pimg) (height pimg) ps
   let
     left (x1,_,_,_) = x1
     top (_,y1,_,_) = y1
     cs = columnwiseChanges forest
     bs = equivalenceBoxes 5 $ stripeEquivalences cs
     bs2 = joinBoxes 5 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
+  saveImage "normal.png" nimg
   saveImage "mean.png" mimg
+  saveImage "regions.png" rimg
   saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $
     drawChanges cs img -- drawChanges cs $ drawBlocks forest
 -- drawBoxes 3 bs $

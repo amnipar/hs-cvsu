@@ -57,6 +57,8 @@ integralMeanByRect int (x,y) (w,h) =
       (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
 
 integralMeanByRadius :: IntegralImage -> Int -> (Int,Int) -> IO (Double)
-integralMeanByRadius int r (cx,cy) = integralMeanByRect int (cx-r,cy-r) (r,r)
+integralMeanByRadius int r (cx,cy) = integralMeanByRect int (cx-r,cy-r) (s,s)
+  where
+    s = 2 * r + 1
 
 --integralStatisticsByRect :: IntegralImage -> (Int,Int) -> (Int,Int) -> Statistics
