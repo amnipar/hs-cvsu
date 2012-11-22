@@ -61,8 +61,12 @@ hImageBlockType t
 
 data Statistics =
   Statistics
-  { mean :: Double
+  { items :: Double
+  , sum1 :: Double
+  , sum2 :: Double
+  , mean :: Double
   , variance :: Double
+  , deviation :: Double
   } deriving Eq
 
 newtype Stat = Stat(Int, Int) deriving (Eq, Show)

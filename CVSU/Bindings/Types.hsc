@@ -125,8 +125,12 @@ import Foreign.Ptr
 -- statistics type
 
 #starttype statistics
+#field N , CDouble
+#field sum , CDouble
+#field sum2 , CDouble
 #field mean , CDouble
 #field variance , CDouble
+#field deviation , CDouble
 #stoptype
 
 -- stat grey type

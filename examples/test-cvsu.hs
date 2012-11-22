@@ -260,12 +260,96 @@ meanFilter pimg r = do
   vs <- mapM (values int r) cs
   createFromPixels w h vs
   where
+    w = width pimg
+    h = height pimg
+    cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+    values int r (x,y) = do
+      v <- integralMeanByRadius int r (x,y)
+      return ((x,y),double2Float v)
+
+varianceFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
+varianceFilter pimg r = do
+  int <- createIntegralImage pimg
+  vs <- mapM (values int r) cs
+  createFromPixels w h vs
+  where
+    w = width pimg
+    h = height pimg
+    cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+    values int r (x,y) = do
+      v <- integralVarianceByRadius int r (x,y)
+      return ((x,y),double2Float $ sqrt v)
+
+adaptiveThreshold :: PixelImage -> Int -> IO (Image GrayScale D32)
+adaptiveThreshold pimg r = do
+  int <- createIntegralImage pimg
+  vs <- mapM (values pimg int r) cs
+  createFromPixels w h vs
+  where
+    w = width pimg
+    h = height pimg
+    cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+    values pimg int r (x,y) = do
+      v <- CVSU.getPixel pimg (x,y)
+      m <- liftM double2Float $ integralMeanByRadius int r (x,y)
+      return ((x,y),if v >= m then 1 else 0)
+
+sauvolaThreshold :: PixelImage -> Int -> IO (Image GrayScale D32)
+sauvolaThreshold pimg r = do
+  int <- createIntegralImage pimg
+  ds <- mapM (integralVarianceByRadius int r) cs
+  vs <- mapM (values pimg int r (maxD ds)) cs
+  createFromPixels w h vs
+  where
+    w = width pimg
+    h = height pimg
+    maxD ds = maximum $ map (double2Float.sqrt) ds
+    cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+    values pimg int r d (x,y) = do
+      v <- CVSU.getPixel pimg (x,y)
+      m <- liftM double2Float $ integralMeanByRadius int r (x,y)
+      s <- liftM (double2Float.sqrt) $ integralVarianceByRadius int r (x,y)
+      return ((x,y),if v >= (t d m s) then 1 else 0)
+      where
+        t d m s = m * (1 + 0.5 * (s / d - 1))
+
+minimumByRadius :: PixelImage -> Int -> (Int,Int) -> IO (Float)
+minimumByRadius pimg r (x,y) = do
+  ps <- mapM (CVSU.getPixel pimg) cs
+  return $ minimum ps
+  where
         w = width pimg
         h = height pimg
-        cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
-        values int r (x,y) = do
-          v <- integralMeanByRadius int r (x,y)
-          return ((x,y),double2Float v)
+        cs = [(i,j) | i <- [(max (x-r) 0)..(min (w-1) (x+r))], j <- [(max (y-r) 0)..(min (h-1) (y+r))]]
+
+fengThreshold :: PixelImage -> Int -> IO (Image GrayScale D32)
+fengThreshold pimg r = do
+  int <- createIntegralImage pimg
+  ds <- mapM (integralVarianceByRadius int r) cs
+  vs <- mapM (values pimg int r (maxD ds)) cs
+  createFromPixels w h vs
+  where
+    w = width pimg
+    h = height pimg
+    maxD ds = maximum $ map (double2Float.sqrt) ds
+    cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
+    values pimg int r d (x,y) = do
+      v <- CVSU.getPixel pimg (x,y)
+      minV <- minimumByRadius pimg r (x,y)
+      m <- liftM double2Float $ integralMeanByRadius int r (x,y)
+      s <- liftM (double2Float.sqrt) $ integralVarianceByRadius int r (x,y)
+      locS <- liftM (double2Float.sqrt) $ integralVarianceByRadius int (3*r) (x,y)
+      return ((x,y),if v >= (t minV locS m s) then 1 else 0)
+      where
+        t minV locS m s = (1 - a1) * m + a2 * as * (m - minV) + a3 * minV
+          where
+            as = s/locS
+            g = 2
+            a1 = 0.12
+            k1 = 0.25
+            k2 = 0.04
+            a2 = k1 * as**g
+            a3 = k2 * as**g
 
 meanRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanRegions pimg r = do
@@ -282,29 +366,63 @@ meanRegions pimg r = do
       v <- integralMeanByRect int (x*r,y*r) (r,r)
       return ((x,y),double2Float v)
 
+integralBlocks :: PixelImage -> Int -> IO ([(Int,Int,Int,Int)])
+integralBlocks pimg s = do
+  int <- createIntegralImage pimg
+  bs <- mapM (iblocks int s) cs
+  return $ map fst $ filter ((>0).snd) bs
+  where
+        w = width pimg
+        h = height pimg
+        w' = w `div` s
+        h' = h `div` s
+        cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
+        iblocks int r (x,y) = do
+          s1 <- integralStatisticsByRect int (x*s,y*s) (s,s)
+          s2 <- integralStatisticsByRect int ((x-4)*s,(y-4)*s) (9*s,9*s)
+          return ((x*s,y*s,(x+1)*s,(y+1)*s),(hasChange s1 s2))
+          where
+            hasChange s1 s2 = if d1 > d2 then 1 else 0
+              where
+                n2 = ((items s2) - (items s1))
+                m2 = ((sum1 s2) - (sum1 s1)) / n2
+                d1 = deviation s1
+                d2 = sqrt $ ((sum2 s2) - (sum2 s1)) / n2 - m2**2
+
+
 --drawRects :: [R.Rectangle Int] -> Image
 
 main = do
-  (sourceFile,targetFile) <- readArgs
+  (sourceFile, targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
-  mimg <- meanFilter pimg 3
-  rimg <- meanRegions pimg 5
+  bs <- integralBlocks pimg 8
+  saveImage targetFile $ drawBoxes (0,1,1) bs img
+  --mimg <- meanFilter pimg 3
+  --vimg <- varianceFilter pimg 2
+  --rimg <- meanRegions pimg 5
+  --aimg <- adaptiveThreshold pimg 3
+  --simg <- sauvolaThreshold pimg 3
+  --fimg <- fengThreshold pimg 3
   --withPixelImage pimg $ \i -> do
   --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
-  forest <- createForest pimg (5,5)
-  ps <- CVSU.getAllPixels pimg
-  nimg <- createFromPixels (width pimg) (height pimg) ps
-  let
-    left (x1,_,_,_) = x1
-    top (_,y1,_,_) = y1
-    cs = columnwiseChanges forest
-    bs = equivalenceBoxes 5 $ stripeEquivalences cs
-    bs2 = joinBoxes 5 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
-  saveImage "normal.png" nimg
-  saveImage "mean.png" mimg
-  saveImage "regions.png" rimg
-  saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $
-    drawChanges cs img -- drawChanges cs $ drawBlocks forest
+  --forest <- createForest pimg (5,5)
+  --ps <- CVSU.getAllPixels pimg
+  --nimg <- createFromPixels (width pimg) (height pimg) ps
+  --let
+    --left (x1,_,_,_) = x1
+    --top (_,y1,_,_) = y1
+    --cs = columnwiseChanges forest
+    --bs = equivalenceBoxes 5 $ stripeEquivalences cs
+    --bs2 = joinBoxes 5 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
+  --saveImage "normal.png" nimg
+  --saveImage "mean.png" mimg
+  --saveImage "variance.png" vimg
+  --saveImage "adaptive.png" aimg
+  --saveImage "sauvola.png" simg
+  --saveImage "feng.png" fimg
+  --saveImage "regions.png" rimg
+  --saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $
+  --  drawChanges cs img -- drawChanges cs $ drawBlocks forest
 -- drawBoxes 3 bs $
   --drawBlocks forest $ drawEdges eimg nimg

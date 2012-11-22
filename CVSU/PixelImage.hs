@@ -12,6 +12,7 @@ module CVSU.PixelImage
 , convertPixelImage
 , withPixelImage
 , ptrToPixelImage
+, getPixel
 , getAllPixels
 ) where
 
@@ -110,17 +111,16 @@ cPixelFormat f =
     _         -> c'NONE
 
 hPixelFormat :: C'pixel_format -> PixelFormat
-hPixelFormat f =
-  case f of
-    c'GREY -> FormatGrey
-    c'UYVY -> FormatUYVY
-    c'RGB  -> FormatRGB
-    -- c'BGR  -> FormatBGR
-    c'HSV  -> FormatHSV
-    c'YUV  -> FormatYUV
-    c'LAB  -> FormatLAB
-    c'RGBA -> FormatRGBA
-    _      -> FormatNone
+hPixelFormat f
+  | f == c'GREY = FormatGrey
+  | f == c'UYVY = FormatUYVY
+  | f == c'RGB  = FormatRGB
+--  | f == c'BGR  -> FormatBGR
+  | f == c'HSV  = FormatHSV
+  | f == c'YUV  = FormatYUV
+  | f == c'LAB  = FormatLAB
+  | f == c'RGBA = FormatRGBA
+  | otherwise   = FormatNone
 
 formatToStep :: PixelFormat -> Int
 formatToStep f =
@@ -261,11 +261,14 @@ ptrToPixelImage ownsData fptr =
       | owns == True = poke (p'pixel_image'own_data ptr) 0
       | otherwise    = return ()
 
+getPixel :: PixelImage -> (Int,Int) -> IO (Float)
+getPixel (PixelImage ptr t _ _ _ dx dy s d) (x,y) =
+  valueConverter t d ((dy+y)*s+dx+x)
+
 getAllPixels :: PixelImage -> IO [((Int,Int),Float)]
 getAllPixels (PixelImage ptr t _ w h dx dy s d) =
   mapM getV [(x,y,(dy+y)*s+dx+x) | x <- [0..w-1], y <- [0..h-1]]
   where
-        getV (x,y,o) = do
-          v <- vc d o
-          return ((x,y),v)
-        vc = valueConverter t
+    getV (x,y,o) = do
+      v <- valueConverter t d o
+      return ((x,y),v)

@@ -68,3 +68,9 @@ import Foreign.Ptr
 
 #ccall integral_image_calculate_mean , Ptr <integral_image> -> CLong -> CLong \
   -> CLong -> CLong -> CULong -> IO CDouble
+
+#ccall integral_image_calculate_variance , Ptr <integral_image> -> CLong -> CLong \
+  -> CLong -> CLong -> CULong -> IO CDouble
+
+#ccall integral_image_calculate_statistics , Ptr <integral_image> -> Ptr <statistics> \
+  -> CLong -> CLong -> CLong -> CLong -> CULong -> IO ()

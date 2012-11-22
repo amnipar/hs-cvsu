@@ -3,16 +3,22 @@ module CVSU.Integral
 , createIntegralImage
 , integralMeanByRect
 , integralMeanByRadius
+, integralVarianceByRect
+, integralVarianceByRadius
+, integralStatisticsByRect
+, integralStatisticsByRadius
 ) where
 
 import CVSU.Bindings.Types
 import CVSU.Bindings.Integral
 import CVSU.PixelImage
+import CVSU.Types
 
 import Foreign.C.Types
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
+import Foreign.Marshal
 import Foreign.Concurrent
 import Control.Monad
 
@@ -61,4 +67,30 @@ integralMeanByRadius int r (cx,cy) = integralMeanByRect int (cx-r,cy-r) (s,s)
   where
     s = 2 * r + 1
 
---integralStatisticsByRect :: IntegralImage -> (Int,Int) -> (Int,Int) -> Statistics
+integralVarianceByRect :: IntegralImage -> (Int,Int) -> (Int,Int) -> IO (Double)
+integralVarianceByRect int (x,y) (w,h) =
+  withForeignPtr (integralPtr int) $ \pint ->
+    liftM realToFrac $ c'integral_image_calculate_variance pint
+      (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
+
+integralVarianceByRadius :: IntegralImage -> Int -> (Int,Int) -> IO (Double)
+integralVarianceByRadius int r (cx,cy) = integralVarianceByRect int (cx-r,cy-r) (s,s)
+  where
+    s = 2 * r + 1
+
+integralStatisticsByRect :: IntegralImage -> (Int,Int) -> (Int,Int) -> IO (Statistics)
+integralStatisticsByRect int (x,y) (w,h) =
+  withForeignPtr (integralPtr int) $ \pint -> do
+    let
+      stat = (C'statistics 0 0 0 0 0 0)
+    with stat $ \pstat -> do
+      c'integral_image_calculate_statistics pint pstat
+        (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
+      (C'statistics n s1 s2 m s d) <- peek pstat
+      return $ Statistics (realToFrac n) (realToFrac s1) (realToFrac s2)
+        (realToFrac m) (realToFrac s) (realToFrac d)
+
+integralStatisticsByRadius :: IntegralImage -> Int -> (Int,Int) -> IO (Statistics)
+integralStatisticsByRadius int r (cx,cy) = integralStatisticsByRect int (cx-r,cy-r) (s,s)
+  where
+    s = 2 * r + 1
