@@ -23,6 +23,7 @@ Library
     CVSU.Integral
     CVSU.Edges
     CVSU.ImageTree
+    CVSU.List
   Other-Modules:
     CVSU.Bindings.Types
     CVSU.Bindings.PixelImage

@@ -22,18 +22,20 @@ import Foreign.ForeignPtr
 -- #stoptype
 
 #starttype image_tree
-#field root   , Ptr <image_tree_root>
-#field parent , Ptr <image_tree>
-#field nw     , Ptr <image_tree>
-#field ne     , Ptr <image_tree>
-#field sw     , Ptr <image_tree>
-#field se     , Ptr <image_tree>
-#field block  , Ptr <image_block>
-#field n      , Ptr <image_tree>
-#field e      , Ptr <image_tree>
-#field s      , Ptr <image_tree>
-#field w      , Ptr <image_tree>
-#field level  , CULong
+#field root       , Ptr <image_tree_root>
+#field parent     , Ptr <image_tree>
+#field class_id   , Ptr <image_tree>
+#field nw         , Ptr <image_tree>
+#field ne         , Ptr <image_tree>
+#field sw         , Ptr <image_tree>
+#field se         , Ptr <image_tree>
+#field block      , Ptr <image_block>
+#field n          , Ptr <image_tree>
+#field e          , Ptr <image_tree>
+#field s          , Ptr <image_tree>
+#field w          , Ptr <image_tree>
+#field level      , CULong
+#field class_rank , CULong
 #stoptype
 
 #starttype image_tree_root
@@ -106,3 +108,8 @@ import Foreign.ForeignPtr
 #ccall image_tree_get_direct_neighbor_w , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
 
 #ccall image_tree_find_all_immediate_neighbors , Ptr <list> -> Ptr <image_tree> -> IO <result>
+
+#ccall image_tree_class_create , Ptr <image_tree> -> IO ()
+#ccall image_tree_class_union , Ptr <image_tree> -> Ptr <image_tree> -> IO ()
+#ccall image_tree_class_find , Ptr <image_tree> -> IO (Ptr <image_tree>)
+#ccall image_tree_class_get , Ptr <image_tree> -> IO (CULong)

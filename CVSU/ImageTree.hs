@@ -10,6 +10,9 @@ module CVSU.ImageTree
 , withForest
 , mapDeep
 , filterForest
+, treeNeighbors
+, treeClassFind
+, treeClassUnion
 ) where
 
 import CVSU.Bindings.Types
@@ -29,6 +32,7 @@ import Foreign.Marshal.Array
 import System.IO.Unsafe
 import Data.Maybe
 import Control.Applicative
+import Control.Monad
 import Control.Exception hiding (block)
 import Control.Parallel.Strategies
 import Control.DeepSeq
@@ -52,6 +56,7 @@ instance (Show v) => Show (ImageBlock v) where
 data ImageTree v = EmptyTree |
   ImageTree
   { treePtr :: Ptr C'image_tree
+  , classId :: Integer
   , block :: !(ImageBlock v)
   , nw :: ImageTree v
   , ne :: ImageTree v
@@ -95,11 +100,11 @@ instance Applicative ImageBlock where
 
 instance Functor ImageTree where
   fmap f EmptyTree = EmptyTree
-  fmap f (ImageTree ptr b tnw tne tsw tse) =
-    (ImageTree ptr (fmap f b) (fmap f tnw) (fmap f tne) (fmap f tsw) (fmap f tse))
+  fmap f (ImageTree ptr cid b tnw tne tsw tse) =
+    (ImageTree ptr cid (fmap f b) (fmap f tnw) (fmap f tne) (fmap f tsw) (fmap f tse))
 
 instance Applicative ImageTree where
-  pure v = (ImageTree nullPtr (pure v) EmptyTree EmptyTree EmptyTree EmptyTree)
+  pure v = (ImageTree nullPtr 0 (pure v) EmptyTree EmptyTree EmptyTree EmptyTree)
   ImageTree{ block = ImageBlock{ value = f } } <*> b = fmap f b
 
 instance Functor ImageForest where
@@ -187,23 +192,24 @@ treePtrFromRoot :: C'image_tree_root -> Ptr C'image_tree
 treePtrFromRoot r = c'image_tree_root'tree r
 
 treeFromPtr :: (ForestValue v) => (Ptr() -> IO v) -> Ptr C'image_tree -> IO (ImageTree v)
-treeFromPtr conv ptr
-  | ptr == nullPtr = return EmptyTree
+treeFromPtr conv ptree
+  | ptree == nullPtr = return EmptyTree
   | otherwise      = do
-    t <- peek ptr
-    (C'image_block x y w h pvalue) <- peek (c'image_tree'block t)
+    tree <- peek ptree
+    cid <- c'image_tree_class_get ptree
+    (C'image_block x y w h pvalue) <- peek (c'image_tree'block tree)
     v <- conv pvalue
-    tnw <- treeFromPtr conv (c'image_tree'nw t)
-    tne <- treeFromPtr conv (c'image_tree'ne t)
-    tsw <- treeFromPtr conv (c'image_tree'sw t)
-    tse <- treeFromPtr conv (c'image_tree'se t)
+    tnw <- treeFromPtr conv (c'image_tree'nw tree)
+    tne <- treeFromPtr conv (c'image_tree'ne tree)
+    tsw <- treeFromPtr conv (c'image_tree'sw tree)
+    tse <- treeFromPtr conv (c'image_tree'se tree)
     let
       b = ImageBlock bn be bs bw v
       bn = fromIntegral y
       be = fromIntegral x + fromIntegral w
       bs = fromIntegral y + fromIntegral h
       bw = fromIntegral x
-    return $ ImageTree ptr b tnw tne tsw tse
+    return $ ImageTree ptree (fromIntegral cid) b tnw tne tsw tse
 
 -- allocate image_tree_forest structure using c function and foreign pointers
 -- image_tree_forest_alloc is used for allocating the image struct
@@ -218,18 +224,18 @@ allocImageTreeForest = do
     else do
       return Nothing
 
-withForest :: ImageForest a -> (ImageForest a -> b) -> IO b
-withForest f@ImageForest{ forestPtr = ptr } op =
+withForest :: ImageForest a -> (ImageForest a -> IO b) -> IO b
+withForest f op = -- @ImageForest{ forestPtr = ptr }
   withForeignPtr (forestPtr f) $ \_ -> do
-    r <- do return $! op f
-    touchForeignPtr $! ptr
-    return r
+    r <- op f
+    touchForeignPtr (forestPtr f)
+    return $! r
 
 deep :: NFData a => a -> a
 deep a = deepseq a a
 
 instance NFData (ImageTree a) where
-  rnf (ImageTree _ b tnw tne tsw tse) = tnw `seq` tne `seq` tsw `seq` tse `seq` b `seq` ()
+  rnf (ImageTree _ _ b tnw tne tsw tse) = tnw `seq` tne `seq` tsw `seq` tse `seq` b `seq` ()
 
 instance NFData (ImageBlock a) where
   rnf (ImageBlock bn be bs bw bv) = bn `seq` be `seq` bs `seq` bw `seq` bv `seq` ()
@@ -250,3 +256,48 @@ mapDeep op xs =
 filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
 filterForest cond (ImageForest ptr i r c t ts) =
   (ImageForest ptr i r c t (filter (cond . value . block) $! ts))
+
+-- | Creates an image tree from a list item by casting and converting
+treeFromListItem :: (ForestValue a) => Ptr C'list_item -> IO (ImageTree a)
+treeFromListItem pitem = do
+  item <- peek pitem
+  ptree <- peek $ castPtr $ c'list_item'data item
+  treeFromPtr toValue $ castPtr $ ptree
+
+treeNeighbors :: (ForestValue b) => ImageTree a -> IO [ImageTree b]
+treeNeighbors t = do
+  flist <- allocList
+  withForeignPtr flist $ \plist -> do
+    r1 <- c'image_tree_create_neighbor_list plist
+    if r1 /= c'SUCCESS
+      then error "Failed to create tree neighbor list"
+      else do
+        r2 <- c'image_tree_find_all_immediate_neighbors plist (treePtr t)
+        if r2 /= c'SUCCESS
+          then error "Finding tree neighbors failed"
+          else do
+            ls <- createList flist treeFromListItem
+            return $! ls
+
+treeClassInit :: ImageTree a -> IO (ImageTree a)
+treeClassInit t@(ImageTree ptr _ b nw ne sw se) = do
+  c'image_tree_class_create ptr
+  cid <- treeClassFind t
+  return $ ImageTree ptr cid b nw ne sw se
+
+treeClassUnion :: (ImageTree a, ImageTree a) -> IO (ImageTree a, ImageTree a)
+treeClassUnion (t1@(ImageTree ptr1 _ b1 nw1 ne1 sw1 se1),
+                t2@(ImageTree ptr2 _ b2 nw2 ne2 sw2 se2)) = do
+  c'image_tree_class_create ptr1
+  c'image_tree_class_create ptr2
+  c'image_tree_class_union ptr1 ptr2
+  cid1 <- treeClassFind t1
+  cid2 <- treeClassFind t2
+  return $! ((ImageTree ptr1 cid1 b1 nw1 ne1 sw1 se1),
+          (ImageTree ptr2 cid2 b2 nw2 ne2 sw2 se2))
+
+treeClassFind :: ImageTree a -> IO (Integer)
+treeClassFind t = do
+  pid <- c'image_tree_class_find (treePtr t)
+  tid <- c'image_tree_class_get (treePtr t)
+  return $ fromIntegral tid

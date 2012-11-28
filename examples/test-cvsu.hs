@@ -158,7 +158,7 @@ columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
     avgDev = ceiling $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toLine f (x,y) = liftM toL $ getTree f (x,y)
       where
-        toL (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) =
+        toL (ImageTree _ _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) =
           ((round $ w, round n, round s),d)
     --toLine (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) = trace (show (w,n,e,s)) $
     --  ((round $ (e+w)/2, round n, round s),d)
@@ -237,15 +237,16 @@ drawEdges eimg i =
         he = filter ((>1) . abs . E.value) $ concat $ hedges eimg
         ve = filter ((>1) . abs . E.value) $ concat $ vedges eimg
 
-drawBlocks :: ImageForest Stat -> Image GrayScale D32 -> Image GrayScale D32
+drawBlocks :: ImageForest Stat -> Image RGB D32 -> Image RGB D32
 drawBlocks (ImageForest ptr _ _ _ _ ts) i =
   i
-  <## [rectOp 1 1 r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
+  <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
   where
     ds = map (statDev . T.value . block) ts
     avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
 
+{-
 drawRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
 drawRegions (w,h) s rs = do
   i <- create (w*s,h*s)
@@ -253,6 +254,7 @@ drawRegions (w,h) s rs = do
     i <## [rectOp (v/maxV) (-1) (mkRectangle (x*s,y*s) (s,s)) | ((x,y),v) <- rs]
   where
     maxV = maximum $ map snd rs
+-}
 
 meanFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanFilter pimg r = do
@@ -350,7 +352,7 @@ fengThreshold pimg r = do
             k2 = 0.04
             a2 = k1 * as**g
             a3 = k2 * as**g
-
+{-
 meanRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanRegions pimg r = do
   int <- createIntegralImage pimg
@@ -365,6 +367,7 @@ meanRegions pimg r = do
     regions int r (x,y) = do
       v <- integralMeanByRect int (x*r,y*r) (r,r)
       return ((x,y),double2Float v)
+-}
 
 integralBlocks :: PixelImage -> Int -> IO ([(Int,Int,Int,Int)])
 integralBlocks pimg s = do
@@ -389,15 +392,58 @@ integralBlocks pimg s = do
                 d1 = deviation s1
                 d2 = sqrt $ ((sum2 s2) - (sum2 s1)) / n2 - m2**2
 
+forestRegions :: Int -> ImageForest Stat -> IO [ImageTree Stat]
+forestRegions threshold f = do
+  rs <- mapM (toEqual threshold) $ sortBy (comparing (statDev . T.value . block)) $ trees f
+  return $ filter ((/=0).classId) rs
+  where
+    treeDev = statDev . T.value . block
+    treeMean = statMean . T.value . block
+    testEqual :: IO (ImageTree Stat) -> ImageTree Stat -> IO (ImageTree Stat)
+    testEqual it1 t2 = do
+      t1 <- it1
+      if (abs $ treeMean t1 - treeMean t2) < (treeDev t1 + treeDev t2)
+        then do
+          (t,_) <- treeClassUnion (t1,t2)
+          return t
+        else return t1
+    toEqual threshold tree = do
+      ns <- treeNeighbors tree
+      foldl' testEqual (return tree) $ filter ((<threshold).treeDev) ns
 
---drawRects :: [R.Rectangle Int] -> Image
+drawRegions :: Image RGB D32 -> [ImageTree Stat] -> Image RGB D32
+drawRegions i ts =
+  i <## [rectOp (treeColor colors c) 1 
+      (mkRectangle (round x1, round y1) (round $ x2-x1, round $ y2-y1)) | 
+      ImageTree{classId=c,block=ImageBlock{w=x1,n=y1,e=x2,T.s=y2}} <- ts]
+  where
+    colors = regionColors ts colorList
+    colorList = concat $ repeat [(0,0,1),(0,1,0),(1,0,0),(0,1,1),(1,0,1),(1,1,0)]
+    assignColor (ts,(c:cs)) t =
+      case (lookup (classId t) ts) of
+        Just rc -> (ts,(c:cs))
+        Nothing -> (((classId t),c):ts,cs)
+    treeColor cs cid =
+      case (lookup cid cs) of
+        Just c  -> c
+        Nothing -> (0,0,0)
+    regionColors ts cs = fst $ foldl assignColor ([],cs) ts
 
 main = do
   (sourceFile, targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
-  bs <- integralBlocks pimg 8
-  saveImage targetFile $ drawBoxes (0,1,1) bs img
+  --bs <- integralBlocks pimg 8
+  forest <- createForest pimg (10,10)
+  withForest forest $ \f -> do
+    --let
+    --  cs = columnwiseChanges forest
+      --bs = equivalenceBoxes 5 $ stripeEquivalences cs
+    --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
+    rs <- forestRegions 2 f
+    saveImage targetFile $ drawRegions img rs
+
+  --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3
   --vimg <- varianceFilter pimg 2
   --rimg <- meanRegions pimg 5
@@ -406,7 +452,7 @@ main = do
   --fimg <- fengThreshold pimg 3
   --withPixelImage pimg $ \i -> do
   --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
-  --forest <- createForest pimg (5,5)
+  --
   --ps <- CVSU.getAllPixels pimg
   --nimg <- createFromPixels (width pimg) (height pimg) ps
   --let
