@@ -397,8 +397,10 @@ forestRegions threshold f = do
   rs <- mapM (toEqual threshold) $ sortBy (comparing (statDev . T.value . block)) $ trees f
   return $ filter ((/=0).classId) rs
   where
-    treeDev = statDev . T.value . block
+    treeDev :: ImageTree Stat -> Int
+    treeDev t = max 1 (statDev $ T.value $ block t)
     treeMean = statMean . T.value . block
+    treeDistance t1 t2 = (fromIntegral $ abs $ treeMean t1 - treeMean t2) / (fromIntegral $ treeDev t1 + treeDev t2)
     testEqual :: IO (ImageTree Stat) -> ImageTree Stat -> IO (ImageTree Stat)
     testEqual it1 t2 = do
       t1 <- it1
@@ -413,8 +415,8 @@ forestRegions threshold f = do
 
 drawRegions :: Image RGB D32 -> [ImageTree Stat] -> Image RGB D32
 drawRegions i ts =
-  i <## [rectOp (treeColor colors c) 1 
-      (mkRectangle (round x1, round y1) (round $ x2-x1, round $ y2-y1)) | 
+  i <## [rectOp (treeColor colors c) 1
+      (mkRectangle (round x1, round y1) (round $ x2-x1, round $ y2-y1)) |
       ImageTree{classId=c,block=ImageBlock{w=x1,n=y1,e=x2,T.s=y2}} <- ts]
   where
     colors = regionColors ts colorList
