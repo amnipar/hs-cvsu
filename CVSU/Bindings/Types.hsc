@@ -81,6 +81,7 @@ import Foreign.Ptr
 #num b_STAT_WITH_DIR
 #num b_HSTAT_GREY
 #num b_HSTAT_COLOR
+#num b_STATISTICS
 
 -- image block type
 

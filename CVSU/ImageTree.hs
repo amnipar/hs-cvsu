@@ -3,13 +3,12 @@
 module CVSU.ImageTree
 ( ImageBlock(..)
 , ImageTree(..)
-, NeighborImageTree(..)
 , ImageForest(..)
-, NeighborImageForest(..)
 , ForestValue(..)
 , withForest
 , mapDeep
 , filterForest
+, treeDivide
 , treeNeighbors
 , treeClassFind
 , treeClassUnion
@@ -26,9 +25,10 @@ import CVSU.List
 
 import Foreign.C.String
 import Foreign.Ptr
-import Foreign.ForeignPtr
+import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
 import Foreign.Marshal.Array
+import Foreign.Concurrent
 import System.IO.Unsafe
 import Data.Maybe
 import Control.Applicative
@@ -42,16 +42,16 @@ import Debug.Trace
 
 data ImageBlock v =
   ImageBlock{
-    n :: Float,
-    e :: Float,
-    s :: Float,
-    w :: Float,
+    x :: Int,
+    y :: Int,
+    w :: Int,
+    h :: Int,
     value :: !v
     } deriving Eq
 
 instance (Show v) => Show (ImageBlock v) where
-  show (ImageBlock bn be bs bw bv) =
-    "(B "++(show bn)++","++(show be)++","++(show bs)++","++(show bw)++","++(show bv)++")"
+  show (ImageBlock bx by bw bh bv) =
+    "(B "++(show bx)++","++(show by)++","++(show bw)++","++(show bh)++","++(show bv)++")"
 
 data ImageTree v = EmptyTree |
   ImageTree
@@ -68,8 +68,6 @@ instance (Show a) => Show (ImageTree a) where
   show EmptyTree = "(B)"
   show ImageTree{ block = b } = show b
 
-newtype NeighborImageTree a = NIT(ImageTree a)
-
 data ImageForest v =
   ImageForest
   { forestPtr :: !(ForeignPtr C'image_tree_forest)
@@ -84,15 +82,13 @@ instance (Show a) => Show (ImageForest a) where
   show (ImageForest p i r c t ts) = "(F " ++
     (show r) ++ "x" ++ (show c) ++ " " ++ (show ts) ++ ")"
 
-newtype NeighborImageForest a = NIF(ImageForest a)
-
 instance Eq (ImageForest a) where
   (==) f1 f2 = (forestPtr f1) == (forestPtr f2)
 
 -- make ImageBlock a functor and applicative to allow fmapping
 
 instance Functor ImageBlock where
-  fmap f (ImageBlock bn be bs bw bv) = (ImageBlock bn be bs bw (f bv))
+  fmap f (ImageBlock bx by bw bh bv) = (ImageBlock bx by bw bh (f bv))
 
 instance Applicative ImageBlock where
   pure v = (ImageBlock 0 0 0 0 v)
@@ -167,26 +163,37 @@ instance ForestValue StatColor where
       Stat((fromIntegral m1),(fromIntegral d1)),
       Stat((fromIntegral m2),(fromIntegral d2)))
 
+instance ForestValue Statistics where
+  checkType = (==BlockStatistics).blockType
+  initForest = createForestStub BlockStatistics
+  toValue p = do
+    C'statistics{
+      c'statistics'N = n,
+      c'statistics'sum = s,
+      c'statistics'sum2 = s2,
+      c'statistics'mean = m,
+      c'statistics'variance = v,
+      c'statistics'deviation = d
+    } <- peek ((castPtr p)::Ptr C'statistics)
+    return $ Statistics (realToFrac n) (realToFrac s) (realToFrac s2)
+      (realToFrac m) (realToFrac v) (realToFrac d)
+
 createForestStub :: (ForestValue v) => ImageBlockType -> PixelImage -> (Int,Int) -> IO (ImageForest v)
 createForestStub t i (w,h) = do
-  mforeign <- allocImageTreeForest
-  if isNothing mforeign
-    then error "failed to allocate forest pointer"
-    else do
-      let pforeign = fromJust mforeign
-      withForeignPtr pforeign $ \pforest ->
-        withForeignPtr (imagePtr i) $ \pimage -> do
-          result <- c'image_tree_forest_create pforest pimage 
-            (fromIntegral w) (fromIntegral h) (cImageBlockType t)
-          if result /= c'SUCCESS
-             then error "failed to create forest"
-             else do
-               C'image_tree_forest{
-                 c'image_tree_forest'rows = r,
-                 c'image_tree_forest'cols = c,
-                 c'image_tree_forest'type = t
-               } <- peek pforest
-               return $ ImageForest pforeign i (fromIntegral r) (fromIntegral c) (hImageBlockType t) []
+  fforest <- allocImageForest
+  withForeignPtr fforest $ \pforest ->
+    withForeignPtr (imagePtr i) $ \pimage -> do
+      r1 <- c'image_tree_forest_create pforest pimage 
+        (fromIntegral w) (fromIntegral h) (cImageBlockType t)
+      if r1 /= c'SUCCESS
+        then error $ "Create forest failed with " ++ (show r1)
+        else do
+          C'image_tree_forest{
+            c'image_tree_forest'rows = r,
+            c'image_tree_forest'cols = c,
+            c'image_tree_forest'type = t
+          } <- peek pforest
+          return $ ImageForest fforest i (fromIntegral r) (fromIntegral c) (hImageBlockType t) []
 
 treePtrFromRoot :: C'image_tree_root -> Ptr C'image_tree
 treePtrFromRoot r = c'image_tree_root'tree r
@@ -203,29 +210,21 @@ treeFromPtr conv ptree
     tne <- treeFromPtr conv (c'image_tree'ne tree)
     tsw <- treeFromPtr conv (c'image_tree'sw tree)
     tse <- treeFromPtr conv (c'image_tree'se tree)
-    let
-      b = ImageBlock bn be bs bw v
-      bn = fromIntegral y
-      be = fromIntegral x + fromIntegral w
-      bs = fromIntegral y + fromIntegral h
-      bw = fromIntegral x
+    let b = ImageBlock (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) v
     return $ ImageTree ptree (fromIntegral cid) b tnw tne tsw tse
 
 -- allocate image_tree_forest structure using c function and foreign pointers
 -- image_tree_forest_alloc is used for allocating the image struct
 -- image_tree_forest_free is specified as finalizer
-allocImageTreeForest :: IO (Maybe (ForeignPtr C'image_tree_forest))
-allocImageTreeForest = do
+allocImageForest :: IO (ForeignPtr C'image_tree_forest)
+allocImageForest = do
   ptr <- c'image_tree_forest_alloc
   if ptr /= nullPtr
-    then do
-      foreignPtr <- newForeignPtr p'image_tree_forest_free ptr
-      return $ Just foreignPtr
-    else do
-      return Nothing
+    then newForeignPtr ptr (c'image_tree_forest_free ptr)
+    else error "Memory allocation failed in allocImageForest"
 
 withForest :: ImageForest a -> (ImageForest a -> IO b) -> IO b
-withForest f op = -- @ImageForest{ forestPtr = ptr }
+withForest f op =
   withForeignPtr (forestPtr f) $ \_ -> do
     r <- op f
     touchForeignPtr (forestPtr f)
@@ -238,7 +237,7 @@ instance NFData (ImageTree a) where
   rnf (ImageTree _ _ b tnw tne tsw tse) = tnw `seq` tne `seq` tsw `seq` tse `seq` b `seq` ()
 
 instance NFData (ImageBlock a) where
-  rnf (ImageBlock bn be bs bw bv) = bn `seq` be `seq` bs `seq` bw `seq` bv `seq` ()
+  rnf (ImageBlock bx by bw bh bv) = bx `seq` by `seq` bw `seq` bh `seq` bv `seq` ()
 
 parMap' :: (a -> b) -> [a] -> Eval [b]
 parMap' f [] = return []
@@ -256,6 +255,19 @@ mapDeep op xs =
 filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
 filterForest cond (ImageForest ptr i r c t ts) =
   (ImageForest ptr i r c t (filter (cond . value . block) $! ts))
+
+treeDivide :: (ForestValue b) => ImageTree a -> IO [ImageTree b]
+treeDivide t = do
+  r <- c'image_tree_divide (treePtr t)
+  if (r /= c'SUCCESS)
+    then error $ "Divide tree failed with " ++ (show r)
+    else do
+      ct <- peek (treePtr t)
+      mapM (treeFromPtr toValue)
+        [ c'image_tree'nw ct
+        , c'image_tree'ne ct
+        , c'image_tree'sw ct
+        , c'image_tree'se ct ]
 
 -- | Creates an image tree from a list item by casting and converting
 treeFromListItem :: (ForestValue a) => Ptr C'list_item -> IO (ImageTree a)

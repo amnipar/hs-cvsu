@@ -158,8 +158,8 @@ columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
     avgDev = ceiling $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
     toLine f (x,y) = liftM toL $ getTree f (x,y)
       where
-        toL (ImageTree _ _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) =
-          ((round $ w, round n, round s),d)
+        toL (ImageTree _ _ (ImageBlock x y _ h (Stat(_,d))) _ _ _ _) =
+          ((x, y, y+h),d)
     --toLine (ImageTree _ (ImageBlock n e s w (Stat(_,d))) _ _ _ _) = trace (show (w,n,e,s)) $
     --  ((round $ (e+w)/2, round n, round s),d)
     cols = map (unsafePerformIO . mapM (toLine f)) $! [[(x,y) | y <- [0..r-1]] | x <- [0..c-1]]
@@ -237,14 +237,22 @@ drawEdges eimg i =
         he = filter ((>1) . abs . E.value) $ concat $ hedges eimg
         ve = filter ((>1) . abs . E.value) $ concat $ vedges eimg
 
-drawBlocks :: ImageForest Stat -> Image RGB D32 -> Image RGB D32
+drawBlocks :: ImageForest Statistics -> Image RGB D32 -> Image RGB D32
 drawBlocks (ImageForest ptr _ _ _ _ ts) i =
   i
-  <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
+  -- <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
+  <## [rectOp (toColor m maxM) (-1) r | (r,m) <- map toRect $ map block ts]
+  <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map (toCircle maxD) $ map block ts]
   where
-    ds = map (statDev . T.value . block) ts
-    avgDev = floor $ (fromIntegral $ sum ds) / (fromIntegral $ length ds)
-    toRect (ImageBlock n e s w _) = mkRectangle (round w, round n) (round (s-n), round (e-w))
+    maxM = maximum $ map (mean . T.value . block) ts
+    maxD = maximum $ map (deviation . T.value . block) ts
+    ds = map (deviation . T.value . block) ts
+    avgDev = floor $ (sum ds) / (fromIntegral $ length ds)
+    toColor m maxM = (c,c,c) where c = double2Float $ m / maxM
+    -- toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
+    toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
+    toCircle maxD (ImageBlock x y w h v) = 
+      (x+(w`div`2), y+(h`div`2), round $ (deviation v) / maxD * (fromIntegral w))
 
 {-
 drawRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
@@ -392,32 +400,34 @@ integralBlocks pimg s = do
                 d1 = deviation s1
                 d2 = sqrt $ ((sum2 s2) - (sum2 s1)) / n2 - m2**2
 
-forestRegions :: Int -> ImageForest Stat -> IO [ImageTree Stat]
+forestRegions :: Double -> ImageForest Statistics -> IO [ImageTree Statistics]
 forestRegions threshold f = do
-  rs <- mapM (toEqual threshold) $ sortBy (comparing (statDev . T.value . block)) $ trees f
+  rs <- mapM (toEqual threshold) $ sortBy (comparing (deviation . T.value . block)) $ trees f
   return $ filter ((/=0).classId) rs
   where
-    treeDev :: ImageTree Stat -> Int
-    treeDev t = max 1 (statDev $ T.value $ block t)
-    treeMean = statMean . T.value . block
-    treeDistance t1 t2 = (fromIntegral $ abs $ treeMean t1 - treeMean t2) / (fromIntegral $ treeDev t1 + treeDev t2)
-    testEqual :: IO (ImageTree Stat) -> ImageTree Stat -> IO (ImageTree Stat)
-    testEqual it1 t2 = do
-      t1 <- it1
-      if (abs $ treeMean t1 - treeMean t2) < (treeDev t1 + treeDev t2)
+    treeDev = deviation . T.value . block
+    treeMean = mean . T.value . block
+    treeDistance t1 t2 = dm / sd
+      where
+        dm = abs $ treeMean t1 - treeMean t2
+        sd = max 1 (treeDev t1 + treeDev t2)
+    testEqual :: ImageTree Statistics -> [ImageTree Statistics] -> IO (ImageTree Statistics)
+    testEqual t [] = return t
+    testEqual t (n:ns) = do
+      if (treeDistance t n < 1)
         then do
-          (t,_) <- treeClassUnion (t1,t2)
-          return t
-        else return t1
-    toEqual threshold tree = do
+          (t1,_) <- treeClassUnion (t,n)
+          return t1
+        else return t
+    toEqual threshold tree = do --(trees, classes) 
       ns <- treeNeighbors tree
-      foldl' testEqual (return tree) $ filter ((<threshold).treeDev) ns
+      testEqual tree $ sortBy (comparing (treeDistance tree)) $ filter ((<threshold).treeDev) ns
 
-drawRegions :: Image RGB D32 -> [ImageTree Stat] -> Image RGB D32
+drawRegions :: Image RGB D32 -> [ImageTree Statistics] -> Image RGB D32
 drawRegions i ts =
-  i <## [rectOp (treeColor colors c) 1
-      (mkRectangle (round x1, round y1) (round $ x2-x1, round $ y2-y1)) |
-      ImageTree{classId=c,block=ImageBlock{w=x1,n=y1,e=x2,T.s=y2}} <- ts]
+  i <## [rectOp (treeColor colors c) (-1)
+      (mkRectangle (x,y) (w,h)) |
+      ImageTree{classId=c,block=(ImageBlock x y w h _)} <- ts]
   where
     colors = regionColors ts colorList
     colorList = concat $ repeat [(0,0,1),(0,1,0),(1,0,0),(0,1,1),(1,0,1),(1,1,0)]
@@ -442,8 +452,9 @@ main = do
     --  cs = columnwiseChanges forest
       --bs = equivalenceBoxes 5 $ stripeEquivalences cs
     --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
-    rs <- forestRegions 2 f
+    rs <- forestRegions 1 f
     saveImage targetFile $ drawRegions img rs
+    --saveImage targetFile $ drawBlocks forest img
 
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3

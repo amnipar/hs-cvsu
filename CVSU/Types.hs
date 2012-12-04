@@ -44,19 +44,22 @@ import Control.DeepSeq
 data ImageBlockType =
   BlockEmpty |
   BlockStatGrey |
-  BlockStatColor
+  BlockStatColor |
+  BlockStatistics
   deriving (Eq, Show)
 
 cImageBlockType :: ImageBlockType -> C'image_block_type
 cImageBlockType t
-  | t == BlockStatGrey  = c'b_STAT_GREY
-  | t == BlockStatColor = c'b_STAT_COLOR
-  | otherwise           = c'b_NONE
+  | t == BlockStatGrey   = c'b_STAT_GREY
+  | t == BlockStatColor  = c'b_STAT_COLOR
+  | t == BlockStatistics = c'b_STATISTICS
+  | otherwise            = c'b_NONE
 
 hImageBlockType :: C'image_block_type -> ImageBlockType
 hImageBlockType t
   | t == c'b_STAT_GREY  = BlockStatGrey
   | t == c'b_STAT_COLOR = BlockStatColor
+  | t == c'b_STATISTICS = BlockStatistics
   | otherwise           = BlockEmpty
 
 data Statistics =
