@@ -8,10 +8,12 @@ utilizing the scene understanding features of cvsu.
 
 Installation:
 
-cabal-dev is recommended for experimenting with this library.
+cabal-dev is recommended for experimenting with this library, though normal
+cabal works as well.
 
-At the moment you need to get the c sources of cvsu into hs-cvsu directory:
+At the moment you need to get the c sources of cvsu into hs-cvsu directory
+(in sub-directory c):
 
 cd hs-cvsu
-git clone git@yousource.it.jyu.fi:cvsu/cvsu.git
+git clone git@yousource.it.jyu.fi:cvsu/cvsu.git c
 cabal-dev install
