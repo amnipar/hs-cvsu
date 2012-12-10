@@ -1,4 +1,4 @@
-{-# LANGUAGE OverlappingInstances #-}
+{-# LANGUAGE OverlappingInstances, TupleSections, ScopedTypeVariables #-}
 
 module CVSU.ImageTree
 ( ImageBlock(..)
@@ -12,6 +12,7 @@ module CVSU.ImageTree
 , treeNeighbors
 , treeClassFind
 , treeClassUnion
+, forestSegment
 ) where
 
 import CVSU.Bindings.Types
@@ -64,6 +65,10 @@ data ImageTree v = EmptyTree |
   , se :: ImageTree v
   } deriving Eq
 
+treeWidth = w . block
+
+treeHeight = h . block
+
 instance (Show a) => Show (ImageTree a) where
   show EmptyTree = "(B)"
   show ImageTree{ block = b } = show b
@@ -107,34 +112,58 @@ instance Functor ImageForest where
   fmap f (ImageForest ptr i r c t ts) = (ImageForest ptr i r c t (mapDeep (fmap f) ts))
 
 class ForestValue a where
+  -- | Ensure that the data type contained in the forest is correct
   checkType :: ImageForest a -> Bool
+
+  -- | Cast a void pointer to the correct type contained in the forest
   toValue :: Ptr() -> IO (a)
+
+  -- | Extract the given root tree from the forest
   getTree :: ImageForest a -> (Int,Int) -> IO (ImageTree a)
   getTree f (x,y) =
     withForeignPtr (forestPtr f) $ \pforest -> do
       forest <- peek pforest
       root <- peek $ advancePtr (c'image_tree_forest'roots forest) (y * (cols f) + x)
       (treeFromPtr toValue) $ treePtrFromRoot root
+
+  -- | Initialize the forest structure, given an image and number of rows and
+  --   columns. The init stage is needed to better reuse code between different
+  --   type class implementations. Usually only init is implemented, and the
+  --   create function can be shared.
   initForest :: PixelImage -> (Int,Int) -> IO (ImageForest a)
+
+  -- | Creates the forest structure, given an image and number of rows and
+  --   columns in the root tree array.
   createForest :: PixelImage -> (Int,Int) -> IO (ImageForest a)
   createForest i (w,h) = do
     s <- initForest i (w,h)
     if not $ checkType s
        then error "forest content type is invalid"
        else updateForest s
+
+  -- | Refreshes the forest structure by reading it in full from the underlying
+  --   c structure. Required after operations causing side effects to ensure
+  --   consistency of the whole data structure.
+  refreshForest :: ImageForest a -> IO (ImageForest a)
+  refreshForest (ImageForest fforest i r c t _) =
+    withForeignPtr fforest $ \pforest -> do
+      C'image_tree_forest{c'image_tree_forest'roots=proots} <- peek pforest
+      rs <- peekArray (r*c) proots
+      ts <- mapM (treeFromPtr toValue) $ map treePtrFromRoot rs
+      return $ ImageForest fforest i r c t ts
+
+  -- | Updates the underlying integral images of the forest, invalidating the
+  --   tree contents; thus it requires a refresh. Can be used for processing
+  --   video, if the video frame buffer content is copied directly to the
+  --   memory block containing the image data used for creating the forest.
+  --   Also used by the create function.
   updateForest :: ImageForest a -> IO (ImageForest a)
-  updateForest (ImageForest pforeign i r c t _) = do
-    withForeignPtr pforeign $ \pforest -> do
+  updateForest f@ImageForest{forestPtr=fforest} = do
+    withForeignPtr fforest $ \pforest -> do
       result <- c'image_tree_forest_update pforest
       if result /= c'SUCCESS
-         then error "forest update failed"
-         else do
-           C'image_tree_forest{
-             c'image_tree_forest'roots = proots
-           } <- peek pforest
-           rs <- peekArray (r*c) proots
-           ts <- mapM (treeFromPtr toValue) $ map treePtrFromRoot rs
-           return $ ImageForest pforeign i r c t ts
+         then error $ "Forest update failed with " ++ (show result)
+         else refreshForest f
 
 instance ForestValue Stat where
   checkType = (==BlockStatGrey).blockType
@@ -183,7 +212,7 @@ createForestStub t i (w,h) = do
   fforest <- allocImageForest
   withForeignPtr fforest $ \pforest ->
     withForeignPtr (imagePtr i) $ \pimage -> do
-      r1 <- c'image_tree_forest_create pforest pimage 
+      r1 <- c'image_tree_forest_create pforest pimage
         (fromIntegral w) (fromIntegral h) (cImageBlockType t)
       if r1 /= c'SUCCESS
         then error $ "Create forest failed with " ++ (show r1)
@@ -201,7 +230,7 @@ treePtrFromRoot r = c'image_tree_root'tree r
 treeFromPtr :: (ForestValue v) => (Ptr() -> IO v) -> Ptr C'image_tree -> IO (ImageTree v)
 treeFromPtr conv ptree
   | ptree == nullPtr = return EmptyTree
-  | otherwise      = do
+  | otherwise        = do
     tree <- peek ptree
     cid <- c'image_tree_class_get ptree
     (C'image_block x y w h pvalue) <- peek (c'image_tree'block tree)
@@ -256,6 +285,9 @@ filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
 filterForest cond (ImageForest ptr i r c t ts) =
   (ImageForest ptr i r c t (filter (cond . value . block) $! ts))
 
+-- | Divides the tree in four equal parts in quad-tree fashion. Causes side
+--   effects as the original tree will have four child trees after this
+--   operation.
 treeDivide :: (ForestValue b) => ImageTree a -> IO [ImageTree b]
 treeDivide t = do
   r <- c'image_tree_divide (treePtr t)
@@ -276,6 +308,7 @@ treeFromListItem pitem = do
   ptree <- peek $ castPtr $ c'list_item'data item
   treeFromPtr toValue $ castPtr $ ptree
 
+-- | Finds the current neighbors of the given tree.
 treeNeighbors :: (ForestValue b) => ImageTree a -> IO [ImageTree b]
 treeNeighbors t = do
   flist <- allocList
@@ -291,12 +324,20 @@ treeNeighbors t = do
             ls <- createList flist treeFromListItem
             return $! ls
 
+-- | Initializes a disjunctive set for the tree by setting the parent to
+--   self and rank to zero.
 treeClassInit :: ImageTree a -> IO (ImageTree a)
 treeClassInit t@(ImageTree ptr _ b nw ne sw se) = do
   c'image_tree_class_create ptr
   cid <- treeClassFind t
   return $ ImageTree ptr cid b nw ne sw se
 
+-- | Union part of the Union-Find disjunctive set algorithm. Creates a union
+--   of two sets by assigning the parent of the higher ranking tree as the
+--   parent of the union. As the result, two two trees in question will have
+--   the same classId. Loses persistency, as the classId is changed in the
+--   underlying c structure, so previous versions of the trees that still
+--   point to the same c structure will have different classId.
 treeClassUnion :: (ImageTree a, ImageTree a) -> IO (ImageTree a, ImageTree a)
 treeClassUnion (t1@(ImageTree ptr1 _ b1 nw1 ne1 sw1 se1),
                 t2@(ImageTree ptr2 _ b2 nw2 ne2 sw2 se2)) = do
@@ -308,8 +349,47 @@ treeClassUnion (t1@(ImageTree ptr1 _ b1 nw1 ne1 sw1 se1),
   return $! ((ImageTree ptr1 cid1 b1 nw1 ne1 sw1 se1),
           (ImageTree ptr2 cid2 b2 nw2 ne2 sw2 se2))
 
+-- | Find part of the Union-Find disjunctive set algorithm. Finds the pointer
+--   of the parent tree, caches it in the c structure, and creates an Integer
+--   from the pointer. May cause side effects as the parent pointer is
+--   cached to shorten the search paths for better efficiency.
 treeClassFind :: ImageTree a -> IO (Integer)
 treeClassFind t = do
   pid <- c'image_tree_class_find (treePtr t)
   tid <- c'image_tree_class_get (treePtr t)
   return $ fromIntegral tid
+
+-- | Segments a forest by dividing trees until they are consistent by the
+--   given measure, and by grouping neighboring trees, that are deemed equal in
+--   terms of the provided equivalence operation, by using equivalence classes
+--   implemented for image trees using Union-Find algorithm. The result is a
+--   segmented forest where trees belonging to the same region have the same
+--   classId. Note: the treeDivide and treeClassUnion operations cause side
+--   effects, so this whole operation must be performed in full to leave the
+--   tree list in consistent state, and in the current form, the algorithm is
+--   not safe to parallelize (though in future it probably will be). Also the
+--   resulting Haskell data structure is not persistent (may be later).
+forestSegment :: (ForestValue a) => (ImageTree a -> Bool)
+  -> (ImageTree a -> ImageTree a -> Bool) -> ImageForest a -> IO (ImageForest a)
+forestSegment isConsistent isEq f = do
+  ts <- segment $ trees f
+  ts `seq` refreshForest f
+  where
+    -- find all neighbors and create a union with those that are equivalent and
+    -- consistent according to given measures
+    --unionWithNeighbors :: (ForestValue a) => ImageTree a -> IO [(ImageTree a, ImageTree a)]
+    unionWithNeighbors t = do
+      ns :: [ImageTree a] <- treeNeighbors t
+      mapM (treeClassUnion.(t,)) $ filter (\n -> isConsistent n && (isEq t n)) ns
+    -- go through all trees; add consistent ones to segments, divide in four
+    -- the inconsistent ones
+    --segment :: (ForestValue a) => [ImageTree a] -> IO ()
+    segment [] = return ()
+    segment (t:ts)
+      | isConsistent t = do
+        rs <- unionWithNeighbors t
+        rs `seq` segment ts
+      | treeWidth t > 1 = do
+        cs <- treeDivide t
+        cs `seq` segment (ts ++ cs)
+      | otherwise = segment ts

@@ -70,7 +70,7 @@ data Statistics =
   , mean :: Double
   , variance :: Double
   , deviation :: Double
-  } deriving Eq
+  } deriving (Eq, Show)
 
 newtype Stat = Stat(Int, Int) deriving (Eq, Show)
 newtype Dir = Dir(Int, Int) deriving (Eq, Show)

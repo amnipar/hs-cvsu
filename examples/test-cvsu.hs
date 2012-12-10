@@ -251,7 +251,7 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
     toColor m maxM = (c,c,c) where c = double2Float $ m / maxM
     -- toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
     toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
-    toCircle maxD (ImageBlock x y w h v) = 
+    toCircle maxD (ImageBlock x y w h v) =
       (x+(w`div`2), y+(h`div`2), round $ (deviation v) / maxD * (fromIntegral w))
 
 {-
@@ -405,12 +405,6 @@ forestRegions threshold f = do
   rs <- mapM (toEqual threshold) $ sortBy (comparing (deviation . T.value . block)) $ trees f
   return $ filter ((/=0).classId) rs
   where
-    treeDev = deviation . T.value . block
-    treeMean = mean . T.value . block
-    treeDistance t1 t2 = dm / sd
-      where
-        dm = abs $ treeMean t1 - treeMean t2
-        sd = max 1 (treeDev t1 + treeDev t2)
     testEqual :: ImageTree Statistics -> [ImageTree Statistics] -> IO (ImageTree Statistics)
     testEqual t [] = return t
     testEqual t (n:ns) = do
@@ -419,7 +413,7 @@ forestRegions threshold f = do
           (t1,_) <- treeClassUnion (t,n)
           return t1
         else return t
-    toEqual threshold tree = do --(trees, classes) 
+    toEqual threshold tree = do --(trees, classes)
       ns <- treeNeighbors tree
       testEqual tree $ sortBy (comparing (treeDistance tree)) $ filter ((<threshold).treeDev) ns
 
@@ -441,19 +435,43 @@ drawRegions i ts =
         Nothing -> (0,0,0)
     regionColors ts cs = fst $ foldl assignColor ([],cs) ts
 
+treeDev = deviation . T.value . block
+
+treeMean = mean . T.value . block
+
+treeDistance t1 t2 = dm / sd
+  where
+    dm = abs $ treeMean t1 - treeMean t2
+    sd = max 1 (treeDev t1 + treeDev t2)
+
+checkConsistent :: ImageTree Statistics -> Bool
+-- checkConsistent t = trace (show t) $ (<1) $ treeDev t
+checkConsistent = (<1) . treeDev
+
+checkEqual :: ImageTree Statistics -> ImageTree Statistics -> Bool
+checkEqual t1 t2 = (<1) $ treeDistance t1 t2
+
+getTrees :: ImageTree a -> [ImageTree a]
+getTrees EmptyTree = []
+getTrees t
+  | null cs   = [t]
+  | otherwise = cs
+  where cs = concatMap getTrees [nw t, ne t, sw t, se t]
+
 main = do
   (sourceFile, targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
   --bs <- integralBlocks pimg 8
-  forest <- createForest pimg (10,10)
+  forest <- createForest pimg (8,8)
   withForest forest $ \f -> do
     --let
     --  cs = columnwiseChanges forest
       --bs = equivalenceBoxes 5 $ stripeEquivalences cs
     --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
-    rs <- forestRegions 1 f
-    saveImage targetFile $ drawRegions img rs
+    -- rs <- forestRegions 1 f
+    nf <- forestSegment checkConsistent checkEqual f
+    saveImage targetFile $ drawRegions img $ concatMap getTrees $ trees nf
     --saveImage targetFile $ drawBlocks forest img
 
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
