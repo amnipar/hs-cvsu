@@ -248,8 +248,7 @@ drawBlocks f i =
     ts = concatMap getTrees $ trees f
     maxM = maximum $ map (mean . T.value . block) ts
     maxD = maximum $ map (deviation . T.value . block) ts
-    ds = map (deviation . T.value . block) ts
-    avgDev = floor $ (sum ds) / (fromIntegral $ length ds)
+    
     toColor m maxM = (c,c,c) where c = double2Float $ m / maxM
     -- toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
     toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
@@ -478,6 +477,10 @@ getTrees t
   | otherwise = cs
   where cs = concatMap getTrees [nw t, ne t, sw t, se t]
 
+avgDev :: ImageForest Statistics -> Double
+avgDev f = (sum ds) / (fromIntegral $ length ds)
+  where ds = map (deviation . T.value . block) $ trees f
+
 main = do
   (sourceFile, targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
@@ -491,6 +494,7 @@ main = do
     --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
     -- rs <- forestRegions 1 f
     nf <- forestSegment 4 checkConsistent checkEqual f
+    --print $ show $ avgDev forest
     saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
     --saveImage "blocks.png" $ drawBlocks nf img
 
