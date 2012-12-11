@@ -238,12 +238,14 @@ drawEdges eimg i =
         ve = filter ((>1) . abs . E.value) $ concat $ vedges eimg
 
 drawBlocks :: ImageForest Statistics -> Image RGB D32 -> Image RGB D32
-drawBlocks (ImageForest ptr _ _ _ _ ts) i =
+drawBlocks f i =
   i
   -- <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
   <## [rectOp (toColor m maxM) (-1) r | (r,m) <- map toRect $ map block ts]
   <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map (toCircle maxD) $ map block ts]
+  <## concat [unsafePerformIO $ nlines t | t <- ts]
   where
+    ts = concatMap getTrees $ trees f
     maxM = maximum $ map (mean . T.value . block) ts
     maxD = maximum $ map (deviation . T.value . block) ts
     ds = map (deviation . T.value . block) ts
@@ -253,6 +255,10 @@ drawBlocks (ImageForest ptr _ _ _ _ ts) i =
     toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
     toCircle maxD (ImageBlock x y w h v) =
       (x+(w`div`2), y+(h`div`2), round $ (deviation v) / maxD * (fromIntegral w))
+    nlines t@ImageTree{block=ImageBlock{T.x=tx,T.y=ty,T.w=tw,T.h=th}} = do
+      (ns::[ImageTree Statistics]) <- treeNeighbors t
+      return [lineOp (1,0,0) 1 (tx+(tw`div`2),ty+(th`div`2)) (nx+(nw`div`2),ny+(nh`div`2))
+        | n@ImageBlock{T.x=nx,T.y=ny,T.w=nw,T.h=nh} <- map block ns]
 
 {-
 drawRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
@@ -417,6 +423,21 @@ forestRegions threshold f = do
       ns <- treeNeighbors tree
       testEqual tree $ sortBy (comparing (treeDistance tree)) $ filter ((<threshold).treeDev) ns
 
+colorList = concat $ repeat 
+  [ (0,0,1)
+  , (0,1,0)
+  , (1,0,0)
+  , (0,1,1)
+  , (1,0,1)
+  , (1,1,0)
+  , (0,0,0.5)
+  , (0,0.5,0)
+  , (0.5,0,0)
+  , (0,0.5,0.5)
+  , (0.5,0,0.5)
+  , (0.5,0.5,0)
+  ]
+      
 drawRegions :: Image RGB D32 -> [ImageTree Statistics] -> Image RGB D32
 drawRegions i ts =
   i <## [rectOp (treeColor colors c) (-1)
@@ -424,7 +445,6 @@ drawRegions i ts =
       ImageTree{classId=c,block=(ImageBlock x y w h _)} <- ts]
   where
     colors = regionColors ts colorList
-    colorList = concat $ repeat [(0,0,1),(0,1,0),(1,0,0),(0,1,1),(1,0,1),(1,1,0)]
     assignColor (ts,(c:cs)) t =
       case (lookup (classId t) ts) of
         Just rc -> (ts,(c:cs))
@@ -463,16 +483,16 @@ main = do
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
   --bs <- integralBlocks pimg 8
-  forest <- createForest pimg (8,8)
+  forest <- createForest pimg (16,16)
   withForest forest $ \f -> do
     --let
     --  cs = columnwiseChanges forest
       --bs = equivalenceBoxes 5 $ stripeEquivalences cs
     --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
     -- rs <- forestRegions 1 f
-    nf <- forestSegment checkConsistent checkEqual f
-    saveImage targetFile $ drawRegions img $ concatMap getTrees $ trees nf
-    --saveImage targetFile $ drawBlocks forest img
+    nf <- forestSegment 4 checkConsistent checkEqual f
+    saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
+    --saveImage "blocks.png" $ drawBlocks nf img
 
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3

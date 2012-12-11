@@ -334,7 +334,7 @@ treeClassInit t@(ImageTree ptr _ b nw ne sw se) = do
 
 -- | Union part of the Union-Find disjunctive set algorithm. Creates a union
 --   of two sets by assigning the parent of the higher ranking tree as the
---   parent of the union. As the result, two two trees in question will have
+--   parent of the union. As the result, the two trees in question will have
 --   the same classId. Loses persistency, as the classId is changed in the
 --   underlying c structure, so previous versions of the trees that still
 --   point to the same c structure will have different classId.
@@ -369,9 +369,9 @@ treeClassFind t = do
 --   tree list in consistent state, and in the current form, the algorithm is
 --   not safe to parallelize (though in future it probably will be). Also the
 --   resulting Haskell data structure is not persistent (may be later).
-forestSegment :: (ForestValue a) => (ImageTree a -> Bool)
+forestSegment :: (ForestValue a) => Int -> (ImageTree a -> Bool)
   -> (ImageTree a -> ImageTree a -> Bool) -> ImageForest a -> IO (ImageForest a)
-forestSegment isConsistent isEq f = do
+forestSegment minSize isConsistent isEq f = do
   ts <- segment $ trees f
   ts `seq` refreshForest f
   where
@@ -380,7 +380,7 @@ forestSegment isConsistent isEq f = do
     --unionWithNeighbors :: (ForestValue a) => ImageTree a -> IO [(ImageTree a, ImageTree a)]
     unionWithNeighbors t = do
       ns :: [ImageTree a] <- treeNeighbors t
-      mapM (treeClassUnion.(t,)) $ filter (\n -> isConsistent n && (isEq t n)) ns
+      mapM_ (treeClassUnion.(t,)) $ filter (\n -> (isConsistent n) && (isEq t n)) ns
     -- go through all trees; add consistent ones to segments, divide in four
     -- the inconsistent ones
     --segment :: (ForestValue a) => [ImageTree a] -> IO ()
@@ -389,7 +389,7 @@ forestSegment isConsistent isEq f = do
       | isConsistent t = do
         rs <- unionWithNeighbors t
         rs `seq` segment ts
-      | treeWidth t > 1 = do
+      | treeWidth t > minSize = do
         cs <- treeDivide t
         cs `seq` segment (ts ++ cs)
       | otherwise = segment ts
