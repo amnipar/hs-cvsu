@@ -95,6 +95,8 @@ import Foreign.ForeignPtr
 
 #ccall image_tree_divide , Ptr <image_tree> -> IO <result>
 
+#ccall image_tree_get_child_statistics , Ptr <image_tree> -> Ptr <statistics> -> IO <result>
+
 #ccall image_tree_create_neighbor_list , Ptr <list> -> IO <result>
 
 #ccall image_tree_get_direct_neighbor , Ptr <image_tree> -> Ptr <image_tree> -> <direction> -> IO <result>

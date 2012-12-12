@@ -23,6 +23,8 @@ import System.IO.Unsafe
 import GHC.Float
 import Debug.Trace
 
+import Data.Number.Erf
+
 -- scan lines, compare to each line on the previous col
 -- if line is attached to another line, add an equivalence relation
 -- lines are stored in coordinate order, so could add some skipping logic?
@@ -237,18 +239,18 @@ drawEdges eimg i =
         he = filter ((>1) . abs . E.value) $ concat $ hedges eimg
         ve = filter ((>1) . abs . E.value) $ concat $ vedges eimg
 
-drawBlocks :: ImageForest Statistics -> Image RGB D32 -> Image RGB D32
-drawBlocks f i =
+drawBlocks :: Image RGB D32 -> ImageForest Statistics -> Image RGB D32
+drawBlocks i f =
   i
   -- <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
-  <## [rectOp (toColor m maxM) (-1) r | (r,m) <- map toRect $ map block ts]
-  <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map (toCircle maxD) $ map block ts]
+  <## [rectOp (toColor m maxM) (-1) r | (r,m) <- map (toRect.block) ts]
+  <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map ((toCircle maxD).block) ts]
   <## concat [unsafePerformIO $ nlines t | t <- ts]
   where
     ts = concatMap getTrees $ trees f
     maxM = maximum $ map (mean . T.value . block) ts
     maxD = maximum $ map (deviation . T.value . block) ts
-    
+
     toColor m maxM = (c,c,c) where c = double2Float $ m / maxM
     -- toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
     toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
@@ -258,6 +260,13 @@ drawBlocks f i =
       (ns::[ImageTree Statistics]) <- treeNeighbors t
       return [lineOp (1,0,0) 1 (tx+(tw`div`2),ty+(th`div`2)) (nx+(nw`div`2),ny+(nh`div`2))
         | n@ImageBlock{T.x=nx,T.y=ny,T.w=nw,T.h=nh} <- map block ns]
+
+drawRects :: Image RGB D32 -> [ImageTree a] -> Image RGB D32
+drawRects i ts =
+  i
+  <## [rectOp (0,1,1) 1 r | r <- map (toRect.block) ts]
+  where
+    toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
 
 {-
 drawRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
@@ -422,7 +431,7 @@ forestRegions threshold f = do
       ns <- treeNeighbors tree
       testEqual tree $ sortBy (comparing (treeDistance tree)) $ filter ((<threshold).treeDev) ns
 
-colorList = concat $ repeat 
+colorList = concat $ repeat
   [ (0,0,1)
   , (0,1,0)
   , (1,0,0)
@@ -436,7 +445,7 @@ colorList = concat $ repeat
   , (0.5,0,0.5)
   , (0.5,0.5,0)
   ]
-      
+
 drawRegions :: Image RGB D32 -> [ImageTree Statistics] -> Image RGB D32
 drawRegions i ts =
   i <## [rectOp (treeColor colors c) (-1)
@@ -454,6 +463,30 @@ drawRegions i ts =
         Nothing -> (0,0,0)
     regionColors ts cs = fst $ foldl assignColor ([],cs) ts
 
+drawEntropy :: Image RGB D32 -> [ImageTree Statistics] -> Image RGB D32
+drawEntropy i ts = trace (show (minE,maxE,avgE)) $
+  i <## [rectOp (toColor e) (-1) (mkRectangle (x,y) (w,h)) | (x,y,w,h,e) <- bs]
+  where
+        bs = map toEntropy ts
+        toE (_,_,_,_,e) = e
+        es = map toE bs
+        minE = minimum es
+        maxE = maximum es
+        avgE = (sum es) / (fromIntegral $ length es)
+        toColor e -- = double2Float  $ (e-minE) / (maxE-minE)
+          | e > 1 = (1,1,1)
+          | otherwise = (0,0,0)
+        toEntropy t = unsafePerformIO $ do
+          cs <- treeDivide t
+          let ps = map (prob.(/s).abs.(subtract m).treeMean) cs
+          return (x,y,w,h,-(sum $ map plogp ps))
+          where
+                (ImageBlock x y w h _) = block t
+                m = treeMean t
+                s = max 0.0001 $ treeDev t
+                plogp p = p * logBase 2 p
+
+
 treeDev = deviation . T.value . block
 
 treeMean = mean . T.value . block
@@ -463,19 +496,71 @@ treeDistance t1 t2 = dm / sd
     dm = abs $ treeMean t1 - treeMean t2
     sd = max 1 (treeDev t1 + treeDev t2)
 
+devDistance t1 t2 = ds / ss
+  where
+    s1 = treeDev t1
+    s2 = treeDev t2
+    ds = abs $ s1 - s2
+    ss = sqrt $ max 0.00000001 $ (s1**2 + s2**2) / 2 - ((s1+s2)/2)**2
+
 checkConsistent :: ImageTree Statistics -> Bool
 -- checkConsistent t = trace (show t) $ (<1) $ treeDev t
 checkConsistent = (<1) . treeDev
 
 checkEqual :: ImageTree Statistics -> ImageTree Statistics -> Bool
-checkEqual t1 t2 = (<1) $ treeDistance t1 t2
+checkEqual t1 t2 = (treeDistance t1 t2 < 2) && (devDistance t1 t2 < 2)
+
+checkQuadrantConsistent :: ImageTree Statistics -> Bool
+checkQuadrantConsistent t = unsafePerformIO $ do
+  cs <- treeDivide t
+  let
+    d2 = devDeviation cs
+  return $ (maxMeanDiff cs < d) && (maxDevDiff cs < d2)
+  where
+    m = treeMean t
+    d = treeDev t
+    maxMeanDiff ts = maximum $ map (abs.(\x -> x-m).treeMean) ts
+    maxDevDiff ts = maximum $ map (abs.(\x -> x-d).treeDev) ts
+    devDeviation ts = sqrt var
+      where
+        ds = map treeDev ts
+        n = fromIntegral $ length ds
+        sum1 = sum ds
+        mean = sum1 / n
+        sum2 = sum $ map (**2) ds
+        var = max 0 $ sum2/n - mean**2
+
+sqrt2 = sqrt 2
+prob z = erfc $ z / sqrt2
+plogp p = p * logBase 2 p
+
+checkEntropy :: ImageTree Statistics -> Bool
+checkEntropy t = unsafePerformIO $ do
+  cs <- treeChildStatistics t
+  let ps = map (plogp.prob.(/s).abs.(subtract m).mean) cs
+  return (-(sum ps) < 1.1)
+  where
+    m = treeMean t
+    s = max 0.0001 $ treeDev t
+
+measureEntropy :: ImageTree Statistics -> ImageTree Statistics -> Bool
+measureEntropy t1 t2 = (-(sum ps) < 1)
+  where
+    v1 = T.value $ block t1
+    v2 = T.value $ block t2
+    n = items v1 + items v2
+    m = (sum1 v1 + sum1 v2) / n
+    s = sqrt $ max 0.00000001 $ (sum2 v1 + sum2 v2) / n - m**2
+    p = plogp.prob.(/s).abs.(subtract m).mean
+    ps = map p [v1,v2]
 
 getTrees :: ImageTree a -> [ImageTree a]
 getTrees EmptyTree = []
 getTrees t
-  | null cs   = [t]
+  | null cs = [t]
   | otherwise = cs
-  where cs = concatMap getTrees [nw t, ne t, sw t, se t]
+  where
+    cs = concatMap getTrees [nw t, ne t, sw t, se t]
 
 avgDev :: ImageForest Statistics -> Double
 avgDev f = (sum ds) / (fromIntegral $ length ds)
@@ -493,10 +578,13 @@ main = do
       --bs = equivalenceBoxes 5 $ stripeEquivalences cs
     --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
     -- rs <- forestRegions 1 f
-    nf <- forestSegment 4 checkConsistent checkEqual f
+    nf <- forestSegment 4 checkEntropy checkEqual f
+      --checkConsistent checkEqual f
     --print $ show $ avgDev forest
     saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
-    --saveImage "blocks.png" $ drawBlocks nf img
+    --saveImage "blocks.png" $ drawBlocks img nf
+    saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees nf
+    --saveImage targetFile $ drawEntropy img $ trees f
 
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3

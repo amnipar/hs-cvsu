@@ -8,6 +8,7 @@ module CVSU.ImageTree
 , withForest
 , mapDeep
 , filterForest
+, treeChildStatistics
 , treeDivide
 , treeNeighbors
 , treeClassFind
@@ -196,16 +197,8 @@ instance ForestValue Statistics where
   checkType = (==BlockStatistics).blockType
   initForest = createForestStub BlockStatistics
   toValue p = do
-    C'statistics{
-      c'statistics'N = n,
-      c'statistics'sum = s,
-      c'statistics'sum2 = s2,
-      c'statistics'mean = m,
-      c'statistics'variance = v,
-      c'statistics'deviation = d
-    } <- peek ((castPtr p)::Ptr C'statistics)
-    return $ Statistics (realToFrac n) (realToFrac s) (realToFrac s2)
-      (realToFrac m) (realToFrac v) (realToFrac d)
+    stat <- peek ((castPtr p)::Ptr C'statistics)
+    return $ hStatistics stat
 
 createForestStub :: (ForestValue v) => ImageBlockType -> PixelImage -> (Int,Int) -> IO (ImageForest v)
 createForestStub t i (w,h) = do
@@ -284,6 +277,19 @@ mapDeep op xs =
 filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
 filterForest cond (ImageForest ptr i r c t ts) =
   (ImageForest ptr i r c t (filter (cond . value . block) $! ts))
+
+treeChildStatistics :: ImageTree a -> IO [Statistics]
+treeChildStatistics t = do
+  let
+    allocStatArray :: IO (Ptr C'statistics)
+    allocStatArray = mallocArray 4
+  pstat <- allocStatArray
+  r <- c'image_tree_get_child_statistics (treePtr t) pstat
+  if r /= c'SUCCESS
+    then error $ "Get child statistics failed with " ++ (show r)
+    else do
+      stat <- (peekArray 4 pstat)
+      return $ map hStatistics stat
 
 -- | Divides the tree in four equal parts in quad-tree fashion. Causes side
 --   effects as the original tree will have four child trees after this

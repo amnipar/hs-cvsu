@@ -4,6 +4,7 @@ module CVSU.Types
 , cImageBlockType
 , hImageBlockType
 , Statistics(..)
+, hStatistics
 , Stat(..)
 , Dir(..)
 , StatDir(..)
@@ -71,6 +72,16 @@ data Statistics =
   , variance :: Double
   , deviation :: Double
   } deriving (Eq, Show)
+
+hStatistics :: C'statistics -> Statistics
+hStatistics (C'statistics n s1 s2 m v d) =
+  Statistics
+    (realToFrac n)
+    (realToFrac s1)
+    (realToFrac s2)
+    (realToFrac m)
+    (realToFrac v)
+    (realToFrac d)
 
 newtype Stat = Stat(Int, Int) deriving (Eq, Show)
 newtype Dir = Dir(Int, Int) deriving (Eq, Show)
