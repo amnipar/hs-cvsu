@@ -175,6 +175,24 @@ columnwiseChanges f@(ImageForest ptr _ r c _ ts) = colLines
     handleCol dt c = getCol dt $ foldl (colChanges dt) ([],head c) (tail c)
     colLines = map (handleCol avgDev) cols
 
+columnwiseEntropy :: ImageForest Statistics -> [[(Int,Int,Int)]]
+columnwiseEntropy f@(ImageForest ptr _ r c _ ts) = colLines
+  where
+    toLine f (x,y) = liftM toL $ getTree f (x,y)
+      where
+        toL t@ImageTree{block=ImageBlock{T.x=bx,T.y=by,h=bh}} =
+          ((bx, by, by+bh),not $ neighborhoodEntropy t)
+    cols = map (unsafePerformIO . mapM (toLine f)) $! [[(x,y) | y <- [0..r-1]] | x <- [0..c-1]]
+    colChanges (cs,(c1@(x1,ya1,yb1),e1)) c@((x,ya,yb),e)
+      | e1 && e = (cs, ((x1,ya1,yb),e)) -- trace ("a"++show(x,ya1,yb1,ya,yb)) $
+      | e1 && (not e) = (c1:cs, c) -- trace ("b"++show(x,ya1,yb1,ya,yb)) $
+      | otherwise = (cs, c) -- trace ("c"++show(x,ya1,yb1,ya,yb)) $
+    getCol (cs,(c@(x,y1,y2),e))
+      | e = c:cs
+      | otherwise = cs
+    handleCol c = getCol $ foldl colChanges ([],head c) (tail c)
+    colLines = map handleCol cols
+
 joinBoxes :: Int -> [(Int,Int,Int,Int)] -> [(Int,Int,Int,Int)]
 joinBoxes s bs = combine bs
   where
@@ -243,9 +261,9 @@ drawBlocks :: Image RGB D32 -> ImageForest Statistics -> Image RGB D32
 drawBlocks i f =
   i
   -- <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
-  <## [rectOp (toColor m maxM) (-1) r | (r,m) <- map (toRect.block) ts]
+  <## [rectOp (toColor m 255) (-1) r | (r,m) <- map (toRect.block) ts]
   <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map ((toCircle maxD).block) ts]
-  <## concat [unsafePerformIO $ nlines t | t <- ts]
+  -- <## concat [unsafePerformIO $ nlines t | t <- ts]
   where
     ts = concatMap getTrees $ trees f
     maxM = maximum $ map (mean . T.value . block) ts
@@ -255,7 +273,7 @@ drawBlocks i f =
     -- toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
     toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
     toCircle maxD (ImageBlock x y w h v) =
-      (x+(w`div`2), y+(h`div`2), round $ (deviation v) / maxD * (fromIntegral w))
+      (x+(w`div`2), y+(h`div`2), round $ (min maxD $ deviation v) / maxD * (fromIntegral w))
     nlines t@ImageTree{block=ImageBlock{T.x=tx,T.y=ty,T.w=tw,T.h=th}} = do
       (ns::[ImageTree Statistics]) <- treeNeighbors t
       return [lineOp (1,0,0) 1 (tx+(tw`div`2),ty+(th`div`2)) (nx+(nw`div`2),ny+(nh`div`2))
@@ -464,27 +482,30 @@ drawRegions i ts =
     regionColors ts cs = fst $ foldl assignColor ([],cs) ts
 
 drawEntropy :: Image RGB D32 -> [ImageTree Statistics] -> Image RGB D32
-drawEntropy i ts = trace (show (minE,maxE,avgE)) $
+drawEntropy i ts =
   i <## [rectOp (toColor e) (-1) (mkRectangle (x,y) (w,h)) | (x,y,w,h,e) <- bs]
   where
         bs = map toEntropy ts
-        toE (_,_,_,_,e) = e
-        es = map toE bs
-        minE = minimum es
-        maxE = maximum es
-        avgE = (sum es) / (fromIntegral $ length es)
+        --toE (_,_,_,_,e) = e
+        --es = map toE bs
+        --minE = minimum es
+        --maxE = maximum es
+        --avgE = (sum es) / (fromIntegral $ length es)
         toColor e -- = double2Float  $ (e-minE) / (maxE-minE)
-          | e > 1 = (1,1,1)
+          | e == False = (1,1,1)
           | otherwise = (0,0,0)
-        toEntropy t = unsafePerformIO $ do
-          cs <- treeDivide t
-          let ps = map (prob.(/s).abs.(subtract m).treeMean) cs
-          return (x,y,w,h,-(sum $ map plogp ps))
+        toEntropy t = (x,y,w,h,neighborhoodEntropy t)
+          --unsafePerformIO $ do
+          --cs <- treeChildStatistics t
+          --let
+          --    s2 = max 1 $ devDeviation cs
+          --    ps = map (prob.(/s2).abs.(subtract s).deviation) cs
+          --return (x,y,w,h,neighborhoodEntropy t)
           where
-                (ImageBlock x y w h _) = block t
-                m = treeMean t
-                s = max 0.0001 $ treeDev t
-                plogp p = p * logBase 2 p
+            (ImageBlock x y w h _) = block t
+                --m = treeMean t
+                --s = max 1 $ treeDev t
+                --plogp p = p * logBase 2 p
 
 
 treeDev = deviation . T.value . block
@@ -494,7 +515,16 @@ treeMean = mean . T.value . block
 treeDistance t1 t2 = dm / sd
   where
     dm = abs $ treeMean t1 - treeMean t2
-    sd = max 1 (treeDev t1 + treeDev t2)
+    sd = max 1 (max (treeDev t1) (treeDev t2))
+
+devDeviation vs = sqrt var
+  where
+    ds = map deviation vs
+    n = fromIntegral $ length ds
+    sum1 = sum ds
+    mean = sum1 / n
+    sum2 = sum $ map (**2) ds
+    var = max 0 $ sum2/n - mean**2
 
 devDistance t1 t2 = ds / ss
   where
@@ -503,56 +533,88 @@ devDistance t1 t2 = ds / ss
     ds = abs $ s1 - s2
     ss = sqrt $ max 0.00000001 $ (s1**2 + s2**2) / 2 - ((s1+s2)/2)**2
 
+listStatistics vs = Statistics n s1 s2 m v s
+  where
+    n = sum $ map items vs
+    s1 = sum $ map sum1 vs
+    s2 = sum $ map sum2 vs
+    m = s1 / n
+    v = max 0 $ s2 / n - m**2
+    s = sqrt v
+
 checkConsistent :: ImageTree Statistics -> Bool
 -- checkConsistent t = trace (show t) $ (<1) $ treeDev t
-checkConsistent = (<1) . treeDev
+checkConsistent = (<1.5) . treeDev
 
 checkEqual :: ImageTree Statistics -> ImageTree Statistics -> Bool
-checkEqual t1 t2 = (treeDistance t1 t2 < 2) && (devDistance t1 t2 < 2)
+checkEqual t1 t2 = (treeDistance t1 t2 < 1) && ((<2) $ abs $ treeDev t1 - treeDev t2)
 
 checkQuadrantConsistent :: ImageTree Statistics -> Bool
 checkQuadrantConsistent t = unsafePerformIO $ do
-  cs <- treeDivide t
+  cs <- treeChildStatistics t
   let
     d2 = devDeviation cs
   return $ (maxMeanDiff cs < d) && (maxDevDiff cs < d2)
   where
     m = treeMean t
     d = treeDev t
-    maxMeanDiff ts = maximum $ map (abs.(\x -> x-m).treeMean) ts
-    maxDevDiff ts = maximum $ map (abs.(\x -> x-d).treeDev) ts
-    devDeviation ts = sqrt var
-      where
-        ds = map treeDev ts
-        n = fromIntegral $ length ds
-        sum1 = sum ds
-        mean = sum1 / n
-        sum2 = sum $ map (**2) ds
-        var = max 0 $ sum2/n - mean**2
+    maxMeanDiff ts = maximum $ map (abs.(\x -> x-m).mean) ts
+    maxDevDiff ts = maximum $ map (abs.(\x -> x-d).deviation) ts
 
 sqrt2 = sqrt 2
 prob z = erfc $ z / sqrt2
 plogp p = p * logBase 2 p
 
+neighborhoodEntropy :: ImageTree Statistics -> Bool
+neighborhoodEntropy t
+  | treeDev t < 1 = True
+  | otherwise = unsafePerformIO $ do
+    ns <- treeNeighbors t
+    let
+      nstats = map (T.value . block) (t:ns)
+      lstats = listStatistics nstats
+      s = max 1 $ deviation lstats
+      m = mean lstats
+      e = -(sum $ map (plogp.prob.(/s).abs.(subtract m).mean) nstats)
+    return $ e < 1
+
 checkEntropy :: ImageTree Statistics -> Bool
-checkEntropy t = unsafePerformIO $ do
-  cs <- treeChildStatistics t
-  let ps = map (plogp.prob.(/s).abs.(subtract m).mean) cs
-  return (-(sum ps) < 1.1)
-  where
-    m = treeMean t
-    s = max 0.0001 $ treeDev t
+checkEntropy t
+  | treeDev t < 1 = True
+  | treeWidth t <= 4 = True
+  | otherwise = unsafePerformIO $ do
+    cs <- treeChildStatistics t
+    ns <- treeNeighbors t
+    let
+      nstats = listStatistics  $ map (T.value . block) (t:ns)
+      ds = max 1 $ deviation nstats
+      m = treeMean t
+      s = treeDev t
+      se = -(sum $ map (plogp.prob.(/ds).abs.(subtract s).deviation) cs)
+      me = -(sum $ map (plogp.prob.(/ds).abs.(subtract m).mean) cs)
+    return $ (se < 1) && (me < 1)
+    --where
+    --  m = treeMean t
+    --  s = treeDev t
+    --  s1 = max 1 $ s
 
 measureEntropy :: ImageTree Statistics -> ImageTree Statistics -> Bool
-measureEntropy t1 t2 = (-(sum ps) < 1)
-  where
+measureEntropy t1 t2 = unsafePerformIO $ do
+  ns1 <- treeNeighbors t1
+  ns2 <- treeNeighbors t2
+  let
+    nstats = listStatistics $ map (T.value . block) (ns1 ++ ns2)
+    ds = max 1 $ deviation nstats
     v1 = T.value $ block t1
     v2 = T.value $ block t2
+    vs = [v1,v2]
     n = items v1 + items v2
     m = (sum1 v1 + sum1 v2) / n
-    s = sqrt $ max 0.00000001 $ (sum2 v1 + sum2 v2) / n - m**2
-    p = plogp.prob.(/s).abs.(subtract m).mean
-    ps = map p [v1,v2]
+    s = sqrt $ max 0 $ (sum2 v1 + sum2 v2) / n - m**2
+    s1 = max 1 s
+    me = -(sum $ map (plogp.prob.(/s1).abs.(subtract m).mean) vs)
+    se = -(sum $ map (plogp.prob.(/ds).abs.(subtract s).deviation) vs)
+  return $ (se < 1) && (me < 1)
 
 getTrees :: ImageTree a -> [ImageTree a]
 getTrees EmptyTree = []
@@ -570,21 +632,22 @@ main = do
   (sourceFile, targetFile) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
+  --mimg <- meanFilter pimg 1
   --bs <- integralBlocks pimg 8
   forest <- createForest pimg (16,16)
   withForest forest $ \f -> do
-    --let
-    --  cs = columnwiseChanges forest
-      --bs = equivalenceBoxes 5 $ stripeEquivalences cs
-    --saveImage targetFile $ drawChanges cs $ drawBlocks forest img
+    let
+      --es = columnwiseChanges f
+      --bs = equivalenceBoxes 8 $ stripeEquivalences es
+    --saveImage targetFile $ drawBoxes (0,1,1) bs $ drawChanges es img -- $ drawBlocks forest
     -- rs <- forestRegions 1 f
     nf <- forestSegment 4 checkEntropy checkEqual f
       --checkConsistent checkEqual f
     --print $ show $ avgDev forest
     saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
-    --saveImage "blocks.png" $ drawBlocks img nf
+    saveImage "blocks.png" $ drawBlocks img nf
     saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees nf
-    --saveImage targetFile $ drawEntropy img $ trees f
+    --saveImage "entropy.png" $ drawEntropy img $ trees f
 
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3

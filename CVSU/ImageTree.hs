@@ -8,6 +8,8 @@ module CVSU.ImageTree
 , withForest
 , mapDeep
 , filterForest
+, treeWidth
+, treeHeight
 , treeChildStatistics
 , treeDivide
 , treeNeighbors
