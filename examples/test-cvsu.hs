@@ -247,11 +247,11 @@ drawBoxes c bs i = trace (show $ length bs) $
   where
     toRect (x1,y1,x2,y2) = mkRectangle (x1,y1) (x2-x1,y2-y1)
 
-drawEdges :: EdgeImage -> Image GrayScale D32 -> Image GrayScale D32
-drawEdges eimg i =
+drawEdges :: EdgeImage -> Int -> Image RGB D32 -> Image RGB D32
+drawEdges eimg s i =
   i
-  <## [lineOp 1 1 (x,y) (x+8,y) | (Edge x y _ v) <- he] -- ((abs v) / maxV)
-  <## [lineOp 1 1 (x,y) (x,y+8) | (Edge x y _ v) <- ve]
+  <## [lineOp (0,1,1) 2 (x,y) (x+s,y) | (Edge x y _ v) <- he] -- ((abs v) / maxV)
+  <## [lineOp (0,1,1) 2 (x,y) (x,y+s) | (Edge x y _ v) <- ve]
   where
         maxV = maximum $ map (abs . E.value) (he ++ ve)
         he = filter ((>1) . abs . E.value) $ concat $ hedges eimg
@@ -340,12 +340,14 @@ sauvolaThreshold :: PixelImage -> Int -> IO (Image GrayScale D32)
 sauvolaThreshold pimg r = do
   int <- createIntegralImage pimg
   ds <- mapM (integralVarianceByRadius int r) cs
-  vs <- mapM (values pimg int r (maxD ds)) cs
+  vs <- mapM (values pimg int r (avgD ds)) cs
   createFromPixels w h vs
   where
     w = width pimg
     h = height pimg
-    maxD ds = maximum $ map (double2Float.sqrt) ds
+    --maxD ds = maximum $ map (double2Float.sqrt) ds
+    avgD ds = (sum ss) / (fromIntegral $ length ss)
+      where ss = map (double2Float.sqrt) ds
     cs = [(x,y) | x <- [0..w-1], y <- [0..h-1]]
     values pimg int r d (x,y) = do
       v <- CVSU.getPixel pimg (x,y)
@@ -636,10 +638,11 @@ main = do
   --bs <- integralBlocks pimg 8
   forest <- createForest pimg (16,16)
   withForest forest $ \f -> do
-    let
-      --es = columnwiseChanges f
-      --bs = equivalenceBoxes 8 $ stripeEquivalences es
-    --saveImage targetFile $ drawBoxes (0,1,1) bs $ drawChanges es img -- $ drawBlocks forest
+  --  let
+  --    es = columnwiseChanges f
+  --    bs = equivalenceBoxes 8 $ stripeEquivalences es
+  --    bs2 = joinBoxes 8 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
+  --  saveImage targetFile $ drawBoxes (0,1,1) bs $ drawChanges es img -- $ drawBlocks forest
     -- rs <- forestRegions 1 f
     nf <- forestSegment 4 checkEntropy checkEqual f
       --checkConsistent checkEqual f
@@ -647,17 +650,18 @@ main = do
     saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
     saveImage "blocks.png" $ drawBlocks img nf
     saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees nf
-    --saveImage "entropy.png" $ drawEntropy img $ trees f
+    saveImage "entropy.png" $ drawEntropy img $ trees f
 
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3
   --vimg <- varianceFilter pimg 2
   --rimg <- meanRegions pimg 5
   --aimg <- adaptiveThreshold pimg 3
-  --simg <- sauvolaThreshold pimg 3
+  --simg <- sauvolaThreshold pimg 4
   --fimg <- fengThreshold pimg 3
   --withPixelImage pimg $ \i -> do
-  --eimg <- createEdgeImage 8 8 8 8 8 4 pimg
+  --eimg <- createEdgeImage 16 16 16 16 16 8 pimg
+  --saveImage targetFile $ drawEdges eimg 16 img
   --
   --ps <- CVSU.getAllPixels pimg
   --nimg <- createFromPixels (width pimg) (height pimg) ps
@@ -671,7 +675,7 @@ main = do
   --saveImage "mean.png" mimg
   --saveImage "variance.png" vimg
   --saveImage "adaptive.png" aimg
-  --saveImage "sauvola.png" simg
+  --saveImage targetFile simg -- "sauvola.png"
   --saveImage "feng.png" fimg
   --saveImage "regions.png" rimg
   --saveImage targetFile $ drawBoxes (0,1,0) bs2 $ drawBoxes (0,0,1) bs $
