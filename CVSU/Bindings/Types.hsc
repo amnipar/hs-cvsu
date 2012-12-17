@@ -69,6 +69,16 @@ import Foreign.Ptr
 #num LAB
 #num RGBA
 
+-- image rect type
+
+#starttype image_rect
+#field valid  , CULong
+#field offset , CULong
+#field hstep  , CULong
+#field vstep  , CULong
+#field N      , CULong
+#stoptype
+
 -- block type and enum values
 
 #integral_t image_block_type

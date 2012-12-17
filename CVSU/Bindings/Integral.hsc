@@ -20,14 +20,6 @@ import Foreign.Ptr
 #field stride   , CULong
 #stoptype
 
-#starttype integral_image_roi
-#field valid  , CULong
-#field offset , CULong
-#field hstep  , CULong
-#field vstep  , CULong
-#field N      , CULong
-#stoptype
-
 #starttype small_integral_image_box
 #field I_1_data , <SI_1_t>
 #field iA       , Ptr <SI_1_t>

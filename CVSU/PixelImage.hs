@@ -14,6 +14,7 @@ module CVSU.PixelImage
 , ptrToPixelImage
 , getPixel
 , getAllPixels
+, imageMeanByRect
 ) where
 
 import CVSU.Bindings.Types
@@ -21,11 +22,12 @@ import CVSU.Bindings.PixelImage
 import CVSU.Bindings.OpenCV
 
 import Foreign.Ptr
-import Foreign.ForeignPtr
+import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.C.Types
 import Foreign.C.String
 import Foreign.Marshal.Array
 import Foreign.Storable
+import Foreign.Concurrent
 import Control.Monad
 import Data.Maybe
 
@@ -152,65 +154,52 @@ data PixelImage =
   , d :: Ptr()
   } deriving Eq
 
-allocPixelImage :: IO (Maybe (ForeignPtr C'pixel_image))
+allocPixelImage :: IO (ForeignPtr C'pixel_image)
 allocPixelImage = do
   ptr <- c'pixel_image_alloc
   if ptr /= nullPtr
-       then do
-         foreignPtr <- newForeignPtr p'pixel_image_free ptr
-         return $ Just foreignPtr
-         else do
-           return Nothing
+    then newForeignPtr ptr (c'pixel_image_free ptr)
+    else error "Memory allocation failed in allocPixelImage"
 
 createPixelImage :: PixelType -> PixelFormat -> Int -> Int -> IO (PixelImage)
 createPixelImage t f w h = do
-  img <- allocPixelImage
-  if isNothing img
-    then return NullImage
-    else do
-      withForeignPtr (fromJust img) $ \img_ptr -> do
-        r <- c'pixel_image_create img_ptr
-            (cPixelType t)
-            (cPixelFormat f)
-            (fromIntegral w)
-            (fromIntegral h)
-            (fromIntegral $ formatToStep f)
-            (fromIntegral $ formatToStride w f)
-        if r /= c'SUCCESS
-          then return NullImage
-          else ptrToPixelImage True (fromJust img)
+  fimg <- allocPixelImage
+  withForeignPtr fimg $ \pimg -> do
+    r <- c'pixel_image_create pimg
+      (cPixelType t)
+      (cPixelFormat f)
+      (fromIntegral w)
+      (fromIntegral h)
+      (fromIntegral $ formatToStep f)
+      (fromIntegral $ formatToStride w f)
+    if r /= c'SUCCESS
+      then return NullImage
+      else ptrToPixelImage True fimg
 
 readPixelImage :: String -> IO (PixelImage)
 readPixelImage f = do
-  img <- allocPixelImage
-  if isNothing img
-    then return NullImage
-    else do
-      withForeignPtr (fromJust img) $ \img_ptr ->
-        withCString f $ \c_str -> do
-          r <- c'pixel_image_create_from_file img_ptr c_str c'p_U8 c'GREY
-          if r /= c'SUCCESS
-            then return NullImage
-            else ptrToPixelImage True (fromJust img)
+  fimg <- allocPixelImage
+  withForeignPtr fimg $ \pimg ->
+    withCString f $ \c_str -> do
+      r <- c'pixel_image_create_from_file pimg c_str c'p_U8 c'GREY
+      if r /= c'SUCCESS
+        then return NullImage
+        else ptrToPixelImage True fimg
 
 createPixelImageFromData :: PixelType -> PixelFormat -> Int -> Int -> Ptr () -> IO (PixelImage)
 createPixelImageFromData t f w h d = do
-  img <- allocPixelImage
-  if isNothing img
-    then do
-      return NullImage
-    else do
-      withForeignPtr (fromJust img) $ \img_ptr -> do
-        r <- c'pixel_image_create_from_data img_ptr d
-            (cPixelType t)
-            (cPixelFormat f)
-            (fromIntegral w)
-            (fromIntegral h)
-            (fromIntegral $ formatToStep f)
-            (fromIntegral $ formatToStride w f)
-        if r /= c'SUCCESS
-          then return NullImage
-          else ptrToPixelImage False (fromJust img)
+  fimg <- allocPixelImage
+  withForeignPtr fimg $ \pimg -> do
+    r <- c'pixel_image_create_from_data pimg d
+      (cPixelType t)
+      (cPixelFormat f)
+      (fromIntegral w)
+      (fromIntegral h)
+      (fromIntegral $ formatToStep f)
+      (fromIntegral $ formatToStride w f)
+    if r /= c'SUCCESS
+      then return NullImage
+      else ptrToPixelImage False fimg
 
 convertPixelImage :: PixelImage -> PixelImage -> IO (PixelImage)
 convertPixelImage src dst = do
@@ -272,3 +261,9 @@ getAllPixels (PixelImage ptr t _ w h dx dy s d) =
     getV (x,y,o) = do
       v <- valueConverter t d o
       return ((x,y),v)
+
+imageMeanByRect :: PixelImage -> (Int,Int) -> (Int,Int) -> IO (Double)
+imageMeanByRect img (x,y) (w,h) =
+  withForeignPtr (imagePtr img) $ \pimg ->
+    liftM realToFrac $ c'pixel_image_calculate_mean_byte pimg
+      (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0

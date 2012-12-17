@@ -286,15 +286,15 @@ drawRects i ts =
   where
     toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
 
-{-
-drawRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
-drawRegions (w,h) s rs = do
+
+drawPixelRegions :: (Int,Int) -> Int -> [((Int,Int),Float)] -> IO (Image GrayScale D32)
+drawPixelRegions (w,h) s rs = do
   i <- create (w*s,h*s)
   return $
     i <## [rectOp (v/maxV) (-1) (mkRectangle (x*s,y*s) (s,s)) | ((x,y),v) <- rs]
   where
     maxV = maximum $ map snd rs
--}
+
 
 meanFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanFilter pimg r = do
@@ -394,22 +394,21 @@ fengThreshold pimg r = do
             k2 = 0.04
             a2 = k1 * as**g
             a3 = k2 * as**g
-{-
+
 meanRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
-meanRegions pimg r = do
-  int <- createIntegralImage pimg
-  rs <- mapM (regions int r) cs
-  drawRegions (w',h') r rs
+meanRegions img r = do
+  --int <- createIntegralImage pimg
+  rs <- mapM (regions img r) cs
+  drawPixelRegions (w',h') r rs
   where
-    w = width pimg
-    h = height pimg
+    w = width img
+    h = height img
     w' = w `div` r
     h' = h `div` r
     cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
-    regions int r (x,y) = do
-      v <- integralMeanByRect int (x*r,y*r) (r,r)
+    regions img r (x,y) = do
+      v <- imageMeanByRect img (x*r,y*r) (r,r)
       return ((x,y),double2Float v)
--}
 
 integralBlocks :: PixelImage -> Int -> IO ([(Int,Int,Int,Int)])
 integralBlocks pimg s = do
@@ -636,6 +635,8 @@ main = do
   pimg <- readPixelImage sourceFile
   --mimg <- meanFilter pimg 1
   --bs <- integralBlocks pimg 8
+  rimg <- meanRegions pimg 5
+  saveImage "meanregions.png" rimg
   forest <- createForest pimg (size,size)
   withForest forest $ \f -> do
   --  let
@@ -652,6 +653,7 @@ main = do
     saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees nf
     saveImage "entropy.png" $ drawEntropy img $ trees f
 
+  
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3
   --vimg <- varianceFilter pimg 2

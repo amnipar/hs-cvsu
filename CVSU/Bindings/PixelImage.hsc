@@ -30,11 +30,11 @@ import Foreign.Ptr
 
 #ccall pixel_image_free , Ptr <pixel_image> -> IO ()
 
-#ccall pixel_image_create , Ptr <pixel_image> -> <pixel_type> -> \
-  <pixel_format> -> CULong -> CULong -> CULong -> CULong -> IO (<result>)
+#ccall pixel_image_create , Ptr <pixel_image> -> <pixel_type> -> <pixel_format> \
+  -> CULong -> CULong -> CULong -> CULong -> IO (<result>)
 
-#ccall pixel_image_create_from_data , Ptr <pixel_image> -> Ptr () -> \
-  <pixel_type> -> <pixel_format> -> CULong -> CULong -> CULong -> CULong -> IO (<result>)
+#ccall pixel_image_create_from_data , Ptr <pixel_image> -> Ptr () -> <pixel_type> \
+  -> <pixel_format> -> CULong -> CULong -> CULong -> CULong -> IO (<result>)
 
 #ccall pixel_image_destroy , Ptr <pixel_image> -> IO (<result>)
 
@@ -43,3 +43,6 @@ import Foreign.Ptr
 #ccall pixel_image_convert , Ptr <pixel_image> -> Ptr <pixel_image> -> IO (<result>)
 
 #ccall pixel_image_clear , Ptr <pixel_image> -> IO (<result>)
+
+#ccall pixel_image_calculate_mean_byte , Ptr <pixel_image> -> CLong -> CLong \
+  -> CLong -> CLong -> CULong -> IO (CDouble)
