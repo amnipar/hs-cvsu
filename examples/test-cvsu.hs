@@ -631,12 +631,12 @@ avgDev f = (sum ds) / (fromIntegral $ length ds)
   where ds = map (deviation . T.value . block) $ trees f
 
 main = do
-  (sourceFile, targetFile) <- readArgs
+  (sourceFile, targetFile, size) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
   --mimg <- meanFilter pimg 1
   --bs <- integralBlocks pimg 8
-  forest <- createForest pimg (16,16)
+  forest <- createForest pimg (size,size)
   withForest forest $ \f -> do
   --  let
   --    es = columnwiseChanges f
