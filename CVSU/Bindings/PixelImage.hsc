@@ -44,5 +44,14 @@ import Foreign.Ptr
 
 #ccall pixel_image_clear , Ptr <pixel_image> -> IO (<result>)
 
+#ccall pixel_image_find_min_byte , Ptr <pixel_image> -> CLong -> CLong \
+  -> CLong -> CLong -> CULong -> IO (CDouble)
+
+#ccall pixel_image_find_max_byte , Ptr <pixel_image> -> CLong -> CLong \
+  -> CLong -> CLong -> CULong -> IO (CDouble)
+
 #ccall pixel_image_calculate_mean_byte , Ptr <pixel_image> -> CLong -> CLong \
+  -> CLong -> CLong -> CULong -> IO (CDouble)
+
+#ccall pixel_image_calculate_variance_byte , Ptr <pixel_image> -> CLong -> CLong \
   -> CLong -> CLong -> CULong -> IO (CDouble)

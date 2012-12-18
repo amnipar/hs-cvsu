@@ -14,7 +14,10 @@ module CVSU.PixelImage
 , ptrToPixelImage
 , getPixel
 , getAllPixels
+, imageMinByRect
+, imageMaxByRect
 , imageMeanByRect
+, imageVarianceByRect
 ) where
 
 import CVSU.Bindings.Types
@@ -262,8 +265,26 @@ getAllPixels (PixelImage ptr t _ w h dx dy s d) =
       v <- valueConverter t d o
       return ((x,y),v)
 
+imageMinByRect :: PixelImage -> (Int,Int) -> (Int,Int) -> IO (Double)
+imageMinByRect img (x,y) (w,h) =
+  withForeignPtr (imagePtr img) $ \pimg ->
+    liftM realToFrac $ c'pixel_image_find_min_byte pimg
+      (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
+
+imageMaxByRect :: PixelImage -> (Int,Int) -> (Int,Int) -> IO (Double)
+imageMaxByRect img (x,y) (w,h) =
+  withForeignPtr (imagePtr img) $ \pimg ->
+    liftM realToFrac $ c'pixel_image_find_max_byte pimg
+      (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
+
 imageMeanByRect :: PixelImage -> (Int,Int) -> (Int,Int) -> IO (Double)
 imageMeanByRect img (x,y) (w,h) =
   withForeignPtr (imagePtr img) $ \pimg ->
     liftM realToFrac $ c'pixel_image_calculate_mean_byte pimg
+      (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0
+
+imageVarianceByRect :: PixelImage -> (Int,Int) -> (Int,Int) -> IO (Double)
+imageVarianceByRect img (x,y) (w,h) =
+  withForeignPtr (imagePtr img) $ \pimg ->
+    liftM realToFrac $ c'pixel_image_calculate_variance_byte pimg
       (fromIntegral x) (fromIntegral y) (fromIntegral w) (fromIntegral h) 0

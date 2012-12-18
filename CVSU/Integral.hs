@@ -7,6 +7,8 @@ module CVSU.Integral
 , integralVarianceByRadius
 , integralStatisticsByRect
 , integralStatisticsByRadius
+, integralThresholdSauvola
+, integralThresholdFeng
 ) where
 
 import CVSU.Bindings.Types
@@ -94,3 +96,23 @@ integralStatisticsByRadius :: IntegralImage -> Int -> (Int,Int) -> IO (Statistic
 integralStatisticsByRadius int r (cx,cy) = integralStatisticsByRect int (cx-r,cy-r) (s,s)
   where
     s = 2 * r + 1
+
+integralThresholdSauvola :: Int -> Double -> IntegralImage -> IO (PixelImage)
+integralThresholdSauvola r k int = do
+  fimg <- allocPixelImage
+  withForeignPtr (integralPtr int) $ \pint -> do
+    withForeignPtr fimg $ \pimg -> do
+      r <- c'integral_image_threshold_sauvola pint pimg (fromIntegral r) (realToFrac k)
+      if r /= c'SUCCESS
+        then error $ "Sauvola thresholding failed with " ++ (show r)
+        else ptrToPixelImage True fimg
+
+integralThresholdFeng :: Int -> Double -> IntegralImage -> IO (PixelImage)
+integralThresholdFeng r k int = do
+  fimg <- allocPixelImage
+  withForeignPtr (integralPtr int) $ \pint -> do
+    withForeignPtr fimg $ \pimg -> do
+      r <- c'integral_image_threshold_feng pint pimg (fromIntegral r) (realToFrac k)
+      if r /= c'SUCCESS
+        then error $ "Feng thresholding failed with " ++ (show r)
+        else ptrToPixelImage True fimg

@@ -44,6 +44,7 @@ Library
     c
     /usr/include/opencv
   Extra-libraries:
+    m,
     opencv_calib3d,
     opencv_contrib,
     opencv_core,

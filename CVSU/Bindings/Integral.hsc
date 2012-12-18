@@ -66,3 +66,9 @@ import Foreign.Ptr
 
 #ccall integral_image_calculate_statistics , Ptr <integral_image> -> Ptr <statistics> \
   -> CLong -> CLong -> CLong -> CLong -> CULong -> IO ()
+
+#ccall integral_image_threshold_sauvola , Ptr <integral_image> -> Ptr <pixel_image> \
+  -> CULong -> CDouble -> IO <result>
+
+#ccall integral_image_threshold_feng , Ptr <integral_image> -> Ptr <pixel_image> \
+  -> CULong -> CDouble -> IO <result>

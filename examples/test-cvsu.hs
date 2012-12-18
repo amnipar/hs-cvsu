@@ -293,7 +293,7 @@ drawPixelRegions (w,h) s rs = do
   return $
     i <## [rectOp (v/maxV) (-1) (mkRectangle (x*s,y*s) (s,s)) | ((x,y),v) <- rs]
   where
-    maxV = maximum $ map snd rs
+    maxV = max 255 $ maximum $ map snd rs
 
 
 meanFilter :: PixelImage -> Int -> IO (Image GrayScale D32)
@@ -395,6 +395,36 @@ fengThreshold pimg r = do
             a2 = k1 * as**g
             a3 = k2 * as**g
 
+minRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
+minRegions img r = do
+  --int <- createIntegralImage pimg
+  rs <- mapM (regions img r) cs
+  drawPixelRegions (w',h') r rs
+  where
+    w = width img
+    h = height img
+    w' = w `div` r
+    h' = h `div` r
+    cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
+    regions img r (x,y) = do
+      v <- imageMinByRect img (x*r,y*r) (r,r)
+      return ((x,y),double2Float v)
+
+maxRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
+maxRegions img r = do
+  --int <- createIntegralImage pimg
+  rs <- mapM (regions img r) cs
+  drawPixelRegions (w',h') r rs
+  where
+    w = width img
+    h = height img
+    w' = w `div` r
+    h' = h `div` r
+    cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
+    regions img r (x,y) = do
+      v <- imageMaxByRect img (x*r,y*r) (r,r)
+      return ((x,y),double2Float v)
+
 meanRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
 meanRegions img r = do
   --int <- createIntegralImage pimg
@@ -408,6 +438,21 @@ meanRegions img r = do
     cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
     regions img r (x,y) = do
       v <- imageMeanByRect img (x*r,y*r) (r,r)
+      return ((x,y),double2Float v)
+
+varianceRegions :: PixelImage -> Int -> IO (Image GrayScale D32)
+varianceRegions img r = do
+  --int <- createIntegralImage pimg
+  rs <- mapM (regions img r) cs
+  drawPixelRegions (w',h') r rs
+  where
+    w = width img
+    h = height img
+    w' = w `div` r
+    h' = h `div` r
+    cs = [(x,y) | x <- [0..w'-1], y <- [0..h'-1]]
+    regions img r (x,y) = do
+      v <- imageVarianceByRect img ((x-1)*r,(y-1)*r) (3*r,3*r)
       return ((x,y),double2Float v)
 
 integralBlocks :: PixelImage -> Int -> IO ([(Int,Int,Int,Int)])
@@ -633,27 +678,38 @@ main = do
   (sourceFile, targetFile, size) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
   pimg <- readPixelImage sourceFile
+  int <- createIntegralImage pimg
+  --timg <- integralThresholdSauvola size 0.5 int
+  timg <- integralThresholdFeng size 0.5 int
+  ps <- CVSU.getAllPixels timg
+  nimg <- createFromPixels (width timg) (height timg) ps
   --mimg <- meanFilter pimg 1
   --bs <- integralBlocks pimg 8
-  rimg <- meanRegions pimg 5
-  saveImage "meanregions.png" rimg
-  forest <- createForest pimg (size,size)
-  withForest forest $ \f -> do
+  --rimg <-
+  --saveImage "sauvola.png" nimg
+  saveImage targetFile nimg
+  --saveImage "minregions.png" =<< minRegions pimg size
+  --saveImage "maxregions.png" =<< maxRegions pimg size
+  --saveImage "meanregions.png" =<< meanRegions pimg size
+  --saveImage "varianceregions.png" =<< varianceRegions pimg size
+
+  --forest <- createForest pimg (size,size)
+  --withForest forest $ \f -> do
   --  let
   --    es = columnwiseChanges f
   --    bs = equivalenceBoxes 8 $ stripeEquivalences es
   --    bs2 = joinBoxes 8 $ (sortBy (comparing left)) $ (sortBy (comparing top)) bs
   --  saveImage targetFile $ drawBoxes (0,1,1) bs $ drawChanges es img -- $ drawBlocks forest
     -- rs <- forestRegions 1 f
-    nf <- forestSegment 4 checkEntropy checkEqual f
+    --nf <- forestSegment 4 checkEntropy checkEqual f
       --checkConsistent checkEqual f
     --print $ show $ avgDev forest
-    saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
-    saveImage "blocks.png" $ drawBlocks img nf
-    saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees nf
-    saveImage "entropy.png" $ drawEntropy img $ trees f
+    --saveImage targetFile $ drawRegions img $ filter ((/=0).classId) $ concatMap getTrees $ trees nf
+    --saveImage "blocks.png" $ drawBlocks img nf
+    --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees nf
+    --saveImage "entropy.png" $ drawEntropy img $ trees f
 
-  
+
   --saveImage targetFile $ drawBoxes (0,1,1) bs img
   --mimg <- meanFilter pimg 3
   --vimg <- varianceFilter pimg 2
