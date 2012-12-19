@@ -677,6 +677,8 @@ avgDev f = (sum ds) / (fromIntegral $ length ds)
 main = do
   (sourceFile, targetFile, size) <- readArgs
   img :: Image RGB D32 <- readFromFile sourceFile
+  ppm <- readPNMPixelImage "tyre1.ppm"
+  writePNMPixelImage "test.ppm" False ppm
   pimg <- readPixelImage sourceFile
   int <- createIntegralImage pimg
   --timg <- integralThresholdSauvola size 0.5 int

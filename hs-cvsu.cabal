@@ -43,6 +43,8 @@ Library
   Include-dirs:
     c
     /usr/include/opencv
+  cc-options:
+    --std=c99
   Extra-libraries:
     m,
     opencv_calib3d,

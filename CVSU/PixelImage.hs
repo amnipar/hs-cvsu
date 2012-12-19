@@ -7,6 +7,8 @@ module CVSU.PixelImage
 , formatToStride
 , allocPixelImage
 , createPixelImage
+, readPNMPixelImage
+, writePNMPixelImage
 , readPixelImage
 , createPixelImageFromData
 , convertPixelImage
@@ -178,6 +180,26 @@ createPixelImage t f w h = do
     if r /= c'SUCCESS
       then return NullImage
       else ptrToPixelImage True fimg
+
+readPNMPixelImage :: String -> IO (PixelImage)
+readPNMPixelImage filename = do
+  fimg <- allocPixelImage
+  withForeignPtr fimg $ \pimg ->
+    withCString filename $ \pfilename -> do
+      r <- c'pixel_image_read pimg pfilename
+      if r /= c'SUCCESS
+        then error $ "Failed to read image " ++ filename
+        else ptrToPixelImage True fimg
+
+writePNMPixelImage :: String -> Bool -> PixelImage -> IO ()
+writePNMPixelImage filename ascii img =
+  withForeignPtr (imagePtr img) $ \pimg ->
+    withCString filename $ \pfilename -> do
+      r <- c'pixel_image_write pimg pfilename (fromIntegral $ if ascii then 1 else 0)
+      if r /= c'SUCCESS
+        then error $ "Failed to write image " ++ filename
+        else return ()
+
 
 readPixelImage :: String -> IO (PixelImage)
 readPixelImage f = do

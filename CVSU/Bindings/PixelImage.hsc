@@ -7,6 +7,7 @@ module CVSU.Bindings.PixelImage where
 
 import CVSU.Bindings.Types
 
+import Foreign.C.String
 import Foreign.Ptr
 
 #starttype pixel_image
@@ -43,6 +44,10 @@ import Foreign.Ptr
 #ccall pixel_image_convert , Ptr <pixel_image> -> Ptr <pixel_image> -> IO (<result>)
 
 #ccall pixel_image_clear , Ptr <pixel_image> -> IO (<result>)
+
+#ccall pixel_image_read , Ptr <pixel_image> -> CString -> IO <result>
+
+#ccall pixel_image_write , Ptr <pixel_image> -> CString -> CULong -> IO <result>
 
 #ccall pixel_image_find_min_byte , Ptr <pixel_image> -> CLong -> CLong \
   -> CLong -> CLong -> CULong -> IO (CDouble)
