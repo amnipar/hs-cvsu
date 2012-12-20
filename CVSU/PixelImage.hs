@@ -45,8 +45,8 @@ data PixelType =
   S16 |
   U32 |
   S32 |
-  U64 |
-  S64 |
+  -- U64 |
+  -- S64 |
   F32 |
   F64
   deriving (Eq, Show)
@@ -59,8 +59,8 @@ cPixelType t
   | t == S16 = c'p_S16
   | t == U32 = c'p_U32
   | t == S32 = c'p_S32
-  | t == U64 = c'p_U64
-  | t == S64 = c'p_S64
+--  | t == U64 = c'p_U64
+--  | t == S64 = c'p_S64
   | t == F32 = c'p_F32
   | t == F64 = c'p_F64
 
@@ -72,8 +72,8 @@ hPixelType t
   | t == c'p_S16 = S16
   | t == c'p_U32 = U32
   | t == c'p_S32 = S32
-  | t == c'p_U64 = U64
-  | t == c'p_S64 = S64
+--  | t == c'p_U64 = U64
+--  | t == c'p_S64 = S64
   | t == c'p_F32 = F32
   | t == c'p_F64 = F64
   | otherwise    = U8
@@ -87,17 +87,18 @@ valueConverter t =
     S16 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CShort) o)))
     U32 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CULong) o)))
     S32 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CLong) o)))
-    U64 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CLLong) o)))
-    S64 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CULLong) o)))
+--    U64 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CLLong) o)))
+--    S64 -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr CULLong) o)))
     F32 -> (\p o -> (liftM realToFrac $ peek (advancePtr ((castPtr p)::Ptr CFloat) o)))
     F64 -> (\p o -> (liftM realToFrac $ peek (advancePtr ((castPtr p)::Ptr CDouble) o)))
 
 data PixelFormat =
   FormatNone |
+  FormatMono |
   FormatGrey |
   FormatUYVY |
   FormatRGB |
-  FormatBGR |
+--  FormatBGR |
   FormatHSV |
   FormatYUV |
   FormatLAB |
@@ -107,6 +108,7 @@ data PixelFormat =
 cPixelFormat :: PixelFormat -> C'pixel_format
 cPixelFormat f =
   case f of
+    FormatMono -> c'MONO
     FormatGrey -> c'GREY
     FormatUYVY -> c'UYVY
     FormatRGB  -> c'RGB
@@ -119,6 +121,7 @@ cPixelFormat f =
 
 hPixelFormat :: C'pixel_format -> PixelFormat
 hPixelFormat f
+  | f == c'MONO = FormatMono
   | f == c'GREY = FormatGrey
   | f == c'UYVY = FormatUYVY
   | f == c'RGB  = FormatRGB
@@ -132,10 +135,11 @@ hPixelFormat f
 formatToStep :: PixelFormat -> Int
 formatToStep f =
   case f of
+    FormatMono -> 1
     FormatGrey -> 1
     FormatUYVY -> 2
     FormatRGB  -> 3
-    FormatBGR  -> 3
+--    FormatBGR  -> 3
     FormatHSV  -> 3
     FormatYUV  -> 3
     FormatLAB  -> 3

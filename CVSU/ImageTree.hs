@@ -286,7 +286,7 @@ treeChildStatistics t = do
     allocStatArray :: IO (Ptr C'statistics)
     allocStatArray = mallocArray 4
   pstat <- allocStatArray
-  r <- c'image_tree_get_child_statistics (treePtr t) pstat
+  r <- c'image_tree_get_child_statistics (treePtr t) pstat nullPtr
   if r /= c'SUCCESS
     then error $ "Get child statistics failed with " ++ (show r)
     else do

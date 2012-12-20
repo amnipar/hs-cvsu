@@ -46,8 +46,8 @@ import Foreign.Ptr
 #num p_S16
 #num p_U32
 #num p_S32
-#num p_U64
-#num p_S64
+-- #num p_U64
+-- #num p_S64
 #num p_F32
 #num p_F64
 
@@ -61,6 +61,7 @@ import Foreign.Ptr
 #integral_t pixel_format
 
 #num NONE
+#num MONO
 #num GREY
 #num UYVY
 #num RGB
