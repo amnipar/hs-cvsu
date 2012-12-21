@@ -86,6 +86,12 @@ import Foreign.ForeignPtr
 
 #ccall image_tree_forest_update , Ptr <image_tree_forest> -> IO <result>
 
+#ccall image_tree_forest_segment_with_deviation , Ptr <image_tree_forest> \
+  -> CDouble -> CULong -> IO <result>
+
+#ccall image_tree_forest_segment_with_entropy , Ptr <image_tree_forest> \
+  -> CULong -> IO <result>
+
 #ccall image_tree_forest_read , \
   Ptr <image_tree_forest> -> CString -> CUShort -> CUShort -> IO <result>
 

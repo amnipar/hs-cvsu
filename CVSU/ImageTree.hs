@@ -16,6 +16,8 @@ module CVSU.ImageTree
 , treeClassFind
 , treeClassUnion
 , forestSegment
+, forestSegmentDeviation
+, forestSegmentEntropy
 ) where
 
 import CVSU.Bindings.Types
@@ -401,3 +403,20 @@ forestSegment minSize isConsistent isEq f = do
         cs <- treeDivide t
         cs `seq` segment (ts ++ cs)
       | otherwise = segment ts
+
+forestSegmentDeviation :: (ForestValue a) => Double -> Int 
+  -> ImageForest a -> IO (ImageForest a)
+forestSegmentDeviation t minSize f =
+  withForeignPtr (forestPtr f) $ \pforest -> do
+    r <- c'image_tree_forest_segment_with_deviation pforest (realToFrac t) (fromIntegral minSize)
+    if r /= c'SUCCESS
+       then error $ "forestSegmentDeviation failed with " ++ (show r)
+       else refreshForest f
+
+forestSegmentEntropy :: (ForestValue a) => Int -> ImageForest a -> IO (ImageForest a)
+forestSegmentEntropy minSize f =
+  withForeignPtr (forestPtr f) $ \pforest -> do
+    r <- c'image_tree_forest_segment_with_entropy pforest (fromIntegral minSize)
+    if r /= c'SUCCESS
+       then error $ "forestSegmentEntropy failed with " ++ (show r)
+       else refreshForest f
