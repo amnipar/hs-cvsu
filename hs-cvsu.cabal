@@ -24,6 +24,7 @@ Library
     CVSU.Edges
     CVSU.ImageTree
     CVSU.List
+    CVSU.OpenCV
   Other-Modules:
     CVSU.Bindings.Types
     CVSU.Bindings.PixelImage
