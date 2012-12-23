@@ -22,8 +22,9 @@ Library
     CVSU.PixelImage
     CVSU.Integral
     CVSU.Edges
-    CVSU.ImageTree
     CVSU.List
+    CVSU.ImageTree
+    CVSU.ConnectedComponents
     CVSU.OpenCV
   Other-Modules:
     CVSU.Bindings.Types
@@ -32,6 +33,7 @@ Library
     CVSU.Bindings.Edges
     CVSU.Bindings.List
     CVSU.Bindings.ImageTree
+    CVSU.Bindings.ConnectedComponents
     CVSU.Bindings.OpenCV
   Extensions:
     ForeignFunctionInterface
@@ -70,7 +72,8 @@ Library
     c/cvsu_opencv.h,
     c/cvsu_integral.h,
     c/cvsu_list.h,
-    c/cvsu_image_tree.h
+    c/cvsu_image_tree.h,
+    c/cvsu_connected_components.h
   Install-includes:
     c/cvsu_config.h,
     c/cvsu_macros.h,
@@ -83,7 +86,8 @@ Library
     c/cvsu_opencv.h,
     c/cvsu_integral.h,
     c/cvsu_list.h,
-    c/cvsu_image_tree.h
+    c/cvsu_image_tree.h,
+    c/cvsu_connected_components.h
   C-sources:
     c/cvsu_memory.c,
     c/cvsu_output.c,
@@ -94,7 +98,8 @@ Library
     c/cvsu_opencv.c,
     c/cvsu_integral.c,
     c/cvsu_list.c,
-    c/cvsu_image_tree.c
+    c/cvsu_image_tree.c,
+    c/cvsu_connected_components.c
 
 source-repository head
   type:     git
