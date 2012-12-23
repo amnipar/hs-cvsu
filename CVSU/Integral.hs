@@ -16,11 +16,11 @@ import CVSU.Bindings.Integral
 import CVSU.PixelImage
 import CVSU.Types
 
-import Foreign.C.Types
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
-import Foreign.Storable
+import Foreign.C.Types
 import Foreign.Marshal
+import Foreign.Storable
 import Foreign.Concurrent
 import Control.Monad
 
