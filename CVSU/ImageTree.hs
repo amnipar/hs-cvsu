@@ -59,6 +59,16 @@ instance (Show v) => Show (ImageBlock v) where
   show (ImageBlock bx by bw bh bv) =
     "(B "++(show bx)++","++(show by)++","++(show bw)++","++(show bh)++","++(show bv)++")"
 
+data ForestRegion =
+  ForestRegion
+  { regionId :: Integer
+  , regionX :: Int
+  , regionY :: Int
+  , regionW :: Int
+  , regionH :: Int
+  , regionStat :: Statistics
+  }
+
 data ImageTree v = EmptyTree |
   ImageTree
   { treePtr :: Ptr C'image_tree
@@ -365,7 +375,6 @@ treeClassUnion (t1@(ImageTree ptr1 _ b1 nw1 ne1 sw1 se1),
 --   cached to shorten the search paths for better efficiency.
 treeClassFind :: ImageTree a -> IO (Integer)
 treeClassFind t = do
-  pid <- c'image_tree_class_find (treePtr t)
   tid <- c'image_tree_class_get (treePtr t)
   return $ fromIntegral tid
 
