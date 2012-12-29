@@ -72,6 +72,10 @@ drawRegions i ts =
           Nothing -> (0,0,0)
     regionColors ts cs = fst $ foldl assignColor ([],cs) $ filter ((/=0).classId) ts
 
+drawForestRegions :: [ForestRegion] -> Image RGB D32 -> Image RGB D32
+drawForestRegions rs img =
+  img <## [rectOp c 1 (mkRectangle (x,y) (w,h)) | (ForestRegion _ x y w h _ c) <- rs]
+
 getTrees :: ImageTree a -> [ImageTree a]
 getTrees EmptyTree = []
 getTrees t
@@ -119,5 +123,6 @@ main = do
   forest <- createForest pimg (size,size)
   withForest forest $ \f -> do
     sf <- forestSegmentEntropy 4 f
-    saveImage targetFile $ drawRegions img $ concatMap getTrees $ trees sf
+    rf <- forestRegionsGet sf
+    saveImage targetFile $ drawForestRegions rf $ drawRegions img $ concatMap getTrees $ trees sf
     --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf

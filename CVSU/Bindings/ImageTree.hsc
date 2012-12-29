@@ -31,6 +31,13 @@ import Foreign.ForeignPtr
 #field stat , <statistics>
 #stoptype
 
+#starttype forest_region
+#field region , Ptr <forest_region_info>
+#field color[0] , Word8
+#field color[1] , Word8
+#field color[2] , Word8
+#stoptype
+
 #starttype image_tree
 #field root        , Ptr <image_tree_root>
 #field parent      , Ptr <image_tree>
@@ -58,12 +65,14 @@ import Foreign.ForeignPtr
 #starttype image_tree_forest
 #field original        , Ptr <pixel_image>
 #field source          , Ptr <pixel_image>
-#field rows            , CUShort
-#field cols            , CUShort
-#field tree_width      , CUShort
-#field tree_height     , CUShort
-#field dx              , CUShort
-#field dy              , CUShort
+#field integral        , <integral_image>
+#field rows            , CULong
+#field cols            , CULong
+#field regions         , CULong
+#field tree_width      , CULong
+#field tree_height     , CULong
+#field dx              , CULong
+#field dy              , CULong
 #field type            , <image_block_type>
 #field trees           , <list>
 #field blocks          , <list>
@@ -89,7 +98,7 @@ import Foreign.ForeignPtr
 
 #ccall image_tree_forest_nullify , Ptr <image_tree_forest> -> IO <result>
 
-#ccall image_tree_forest_is_null , Ptr <image_tree_forest> -> IO <result>
+#ccall image_tree_forest_is_null , Ptr <image_tree_forest> -> IO (CULong)
 
 #ccall image_tree_forest_update_prepare , Ptr <image_tree_forest> -> IO <result>
 
@@ -100,6 +109,9 @@ import Foreign.ForeignPtr
 
 #ccall image_tree_forest_segment_with_entropy , Ptr <image_tree_forest> \
   -> CULong -> IO <result>
+
+#ccall image_tree_forest_get_regions , Ptr <image_tree_forest> \
+  -> Ptr <forest_region> -> IO <result>
 
 #ccall image_tree_forest_read , \
   Ptr <image_tree_forest> -> CString -> CUShort -> CUShort -> IO <result>
@@ -128,6 +140,11 @@ import Foreign.ForeignPtr
 #ccall image_tree_find_all_immediate_neighbors , Ptr <list> -> Ptr <image_tree> -> IO <result>
 
 #ccall image_tree_class_create , Ptr <image_tree> -> IO ()
+
 #ccall image_tree_class_union , Ptr <image_tree> -> Ptr <image_tree> -> IO ()
+
 #ccall image_tree_class_find , Ptr <forest_region_info> -> IO (Ptr <forest_region_info>)
+
 #ccall image_tree_class_get , Ptr <image_tree> -> IO (CULong)
+
+#ccall image_tree_is_class_parent , Ptr <image_tree> -> IO (CULong)

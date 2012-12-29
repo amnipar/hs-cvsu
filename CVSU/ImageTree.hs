@@ -5,6 +5,7 @@ module CVSU.ImageTree
 , ImageTree(..)
 , ImageForest(..)
 , ForestValue(..)
+, ForestRegion(..)
 , withForest
 , mapDeep
 , filterForest
@@ -18,6 +19,7 @@ module CVSU.ImageTree
 , forestSegment
 , forestSegmentDeviation
 , forestSegmentEntropy
+, forestRegionsGet
 ) where
 
 import CVSU.Bindings.Types
@@ -67,6 +69,7 @@ data ForestRegion =
   , regionW :: Int
   , regionH :: Int
   , regionStat :: Statistics
+  , regionColor :: (Float,Float,Float)
   }
 
 data ImageTree v = EmptyTree |
@@ -94,12 +97,13 @@ data ImageForest v =
   , img :: PixelImage
   , rows :: Int
   , cols :: Int
+  , regions :: Int
   , blockType :: ImageBlockType
   , trees :: ![ImageTree v]
   }
 
 instance (Show a) => Show (ImageForest a) where
-  show (ImageForest p i r c t ts) = "(F " ++
+  show (ImageForest p _ r c _ _ ts) = "(F " ++
     (show r) ++ "x" ++ (show c) ++ " " ++ (show ts) ++ ")"
 
 instance Eq (ImageForest a) where
@@ -124,7 +128,7 @@ instance Applicative ImageTree where
   ImageTree{ block = ImageBlock{ value = f } } <*> b = fmap f b
 
 instance Functor ImageForest where
-  fmap f (ImageForest ptr i r c t ts) = (ImageForest ptr i r c t (mapDeep (fmap f) ts))
+  fmap f (ImageForest ptr i r c s t ts) = (ImageForest ptr i r c s t (mapDeep (fmap f) ts))
 
 class ForestValue a where
   -- | Ensure that the data type contained in the forest is correct
@@ -160,12 +164,15 @@ class ForestValue a where
   --   c structure. Required after operations causing side effects to ensure
   --   consistency of the whole data structure.
   refreshForest :: ImageForest a -> IO (ImageForest a)
-  refreshForest (ImageForest fforest i r c t _) =
+  refreshForest (ImageForest fforest i r c _ t _) =
     withForeignPtr fforest $ \pforest -> do
-      C'image_tree_forest{c'image_tree_forest'roots=proots} <- peek pforest
+      C'image_tree_forest{
+        c'image_tree_forest'roots=proots,
+        c'image_tree_forest'regions=regions
+      } <- peek pforest
       rs <- peekArray (r*c) proots
       ts <- mapM (treeFromPtr toValue) $ map treePtrFromRoot rs
-      return $ ImageForest fforest i r c t ts
+      return $ ImageForest fforest i r c (fromIntegral regions) t ts
 
   -- | Updates the underlying integral images of the forest, invalidating the
   --   tree contents; thus it requires a refresh. Can be used for processing
@@ -227,9 +234,15 @@ createForestStub t i (w,h) = do
           C'image_tree_forest{
             c'image_tree_forest'rows = r,
             c'image_tree_forest'cols = c,
+            c'image_tree_forest'regions = s,
             c'image_tree_forest'type = t
           } <- peek pforest
-          return $ ImageForest fforest i (fromIntegral r) (fromIntegral c) (hImageBlockType t) []
+          return $ ImageForest fforest i
+            (fromIntegral r)
+            (fromIntegral c)
+            (fromIntegral s)
+            (hImageBlockType t)
+            []
 
 treePtrFromRoot :: C'image_tree_root -> Ptr C'image_tree
 treePtrFromRoot r = c'image_tree_root'tree r
@@ -289,8 +302,8 @@ mapDeep op xs =
     evaluate $! deep $ runEval $ parMap' op $ xs
 
 filterForest :: (a -> Bool) -> ImageForest a -> ImageForest a
-filterForest cond (ImageForest ptr i r c t ts) =
-  (ImageForest ptr i r c t (filter (cond . value . block) $! ts))
+filterForest cond (ImageForest ptr i r c s t ts) =
+  (ImageForest ptr i r c s t (filter (cond . value . block) $! ts))
 
 treeChildStatistics :: ImageTree a -> IO [Statistics]
 treeChildStatistics t = do
@@ -361,8 +374,6 @@ treeClassInit t@(ImageTree ptr _ b nw ne sw se) = do
 treeClassUnion :: (ImageTree a, ImageTree a) -> IO (ImageTree a, ImageTree a)
 treeClassUnion (t1@(ImageTree ptr1 _ b1 nw1 ne1 sw1 se1),
                 t2@(ImageTree ptr2 _ b2 nw2 ne2 sw2 se2)) = do
-  c'image_tree_class_create ptr1
-  c'image_tree_class_create ptr2
   c'image_tree_class_union ptr1 ptr2
   cid1 <- treeClassFind t1
   cid2 <- treeClassFind t2
@@ -429,3 +440,36 @@ forestSegmentEntropy minSize f =
     if r /= c'SUCCESS
        then error $ "forestSegmentEntropy failed with " ++ (show r)
        else refreshForest f
+
+forestRegionsGet :: (ForestValue a) => ImageForest a -> IO [ForestRegion]
+forestRegionsGet f =
+  withForeignPtr (forestPtr f) $ \pforest -> do
+    let
+      targetSize = regions f
+      allocTargetArray :: IO (Ptr C'forest_region)
+      allocTargetArray = mallocArray targetSize
+      toColor (c1:c2:c3:cs) = (c1,c2,c3)
+      toColor cs = (0,0,0)
+      readRegion :: C'forest_region -> IO (ForestRegion)
+      readRegion (C'forest_region pregion c1 c2 c3) = do
+        --color <- (peekArray 3 pcolor)
+        C'forest_region_info{
+          c'forest_region_info'x1=x1,
+          c'forest_region_info'y1=y1,
+          c'forest_region_info'x2=x2,
+          c'forest_region_info'y2=y2,
+          c'forest_region_info'stat=stat
+        } <- peek pregion
+        return $ ForestRegion
+          (fromIntegral $ ptrToWordPtr pregion)
+          (fromIntegral x1)
+          (fromIntegral y1)
+          (fromIntegral $ x2-x1)
+          (fromIntegral $ y2-y1)
+          (hStatistics stat)
+          (toColor $ map ((/255).realToFrac) [c1,c2,c3])
+    ptarget <- allocTargetArray
+    print $ show targetSize
+    c'image_tree_forest_get_regions pforest ptarget
+    target <- (peekArray targetSize ptarget)
+    mapM readRegion target
