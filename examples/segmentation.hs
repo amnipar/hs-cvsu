@@ -92,14 +92,15 @@ drawRects i ts =
     ri = grayToRGB i
     toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
 
-drawBlocks :: Image RGB D32 -> ImageForest Statistics -> Image RGB D32
-drawBlocks i f =
-  i
+drawBlocks :: Image GrayScale D32 -> ImageForest Statistics -> Image RGB D32
+drawBlocks img f =
+  rimg
   -- <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
   <## [rectOp (toColor m 255) (-1) r | (r,m) <- map toRect $ filter s $ map block ts]
-  -- <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map ((toCircle maxD).block) $ trees f]
-  -- <## concat [unsafePerformIO $ nlines t | t <- ts]
+  <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map ((toCircle maxD).block) $ trees f]
+  <## concat [unsafePerformIO $ nlines t | t <- ts]
   where
+    rimg = grayToRGB img
     ts = concatMap getTrees $ trees f
     maxM = maximum $ map (mean . value . block) ts
     maxD = maximum $ map (deviation . value . block) $ trees f
@@ -125,4 +126,5 @@ main = do
     sf <- forestSegmentEntropy 4 f
     rf <- forestRegionsGet sf
     saveImage targetFile $ drawForestRegions rf $ drawRegions img $ concatMap getTrees $ trees sf
-    --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
+    saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
+    saveImage "blocks.png" $ drawBlocks img sf

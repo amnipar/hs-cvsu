@@ -113,9 +113,6 @@ import Foreign.ForeignPtr
 #ccall image_tree_forest_get_regions , Ptr <image_tree_forest> \
   -> Ptr <forest_region> -> IO <result>
 
-#ccall image_tree_forest_read , \
-  Ptr <image_tree_forest> -> CString -> CUShort -> CUShort -> IO <result>
-
 #ccall image_tree_root_update , Ptr <image_tree_root> -> IO <result>
 
 #ccall image_tree_update , Ptr <image_tree> -> IO <result>

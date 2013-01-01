@@ -469,7 +469,6 @@ forestRegionsGet f =
           (hStatistics stat)
           (toColor $ map ((/255).realToFrac) [c1,c2,c3])
     ptarget <- allocTargetArray
-    print $ show targetSize
     c'image_tree_forest_get_regions pforest ptarget
     target <- (peekArray targetSize ptarget)
     mapM readRegion target
