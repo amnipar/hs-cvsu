@@ -20,6 +20,7 @@ module CVSU.ImageTree
 , forestSegmentDeviation
 , forestSegmentEntropy
 , forestRegionsGet
+, forestDrawImage
 ) where
 
 import CVSU.Bindings.Types
@@ -446,29 +447,40 @@ forestRegionsGet f =
   withForeignPtr (forestPtr f) $ \pforest -> do
     let
       targetSize = regions f
-      allocTargetArray :: IO (Ptr C'forest_region)
+      allocTargetArray :: IO (Ptr (Ptr C'forest_region_info))
       allocTargetArray = mallocArray targetSize
-      toColor (c1:c2:c3:cs) = (c1,c2,c3)
-      toColor cs = (0,0,0)
-      readRegion :: C'forest_region -> IO (ForestRegion)
-      readRegion (C'forest_region pregion c1 c2 c3) = do
-        --color <- (peekArray 3 pcolor)
-        C'forest_region_info{
-          c'forest_region_info'x1=x1,
-          c'forest_region_info'y1=y1,
-          c'forest_region_info'x2=x2,
-          c'forest_region_info'y2=y2,
-          c'forest_region_info'stat=stat
-        } <- peek pregion
+      makeC = (/255).realToFrac
+      toColor c1 c2 c3 = (makeC c1, makeC c2, makeC c3)
+      readRegion :: Ptr C'forest_region_info -> IO (ForestRegion)
+      readRegion pregion = do
+        (C'forest_region_info rid _ x1 y1 x2 y2 stat c1 c2 c3) <- peek pregion
         return $ ForestRegion
-          (fromIntegral $ ptrToWordPtr pregion)
+          (fromIntegral $ ptrToWordPtr rid)
           (fromIntegral x1)
           (fromIntegral y1)
           (fromIntegral $ x2-x1)
           (fromIntegral $ y2-y1)
           (hStatistics stat)
-          (toColor $ map ((/255).realToFrac) [c1,c2,c3])
+          (toColor c1 c2 c3)
     ptarget <- allocTargetArray
     c'image_tree_forest_get_regions pforest ptarget
     target <- (peekArray targetSize ptarget)
     mapM readRegion target
+
+-- | Draws an image of the forest using the current division and region info.
+--   Information from regions or individual trees will be used (based on
+--   parameter useRegions) and either the mean intensity of the whole region or
+--   the assigned color of the region can be used (based on parameter useColors).
+forestDrawImage :: Bool -> Bool -> ImageForest a -> IO (PixelImage)
+forestDrawImage useRegions useColors forest = do
+  fimg <- allocPixelImage
+  withForeignPtr fimg $ \pimg ->
+    withForeignPtr (forestPtr forest) $ \pforest -> do
+      r <- c'image_tree_forest_draw_image 
+        pforest
+        pimg
+        (if useRegions then 1 else 0)
+        (if useColors then 1 else 0)
+      if r /= c'SUCCESS
+         then error "Drawing forest image failed"
+         else ptrToPixelImage True fimg

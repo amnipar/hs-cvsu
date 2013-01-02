@@ -13,13 +13,6 @@ import CVSU.Bindings.List
 import Foreign.C.String
 import Foreign.Ptr
 import Foreign.ForeignPtr
--- import System.IO.Unsafe
--- import Data.Maybe
-
--- #starttype image_tree_neighbor
--- #field tree     , Ptr <image_tree>
--- #field strength , CFloat
--- #stoptype
 
 #starttype forest_region_info
 #field id   , Ptr <forest_region_info>
@@ -29,10 +22,6 @@ import Foreign.ForeignPtr
 #field x2   , CULong
 #field y2   , CULong
 #field stat , <statistics>
-#stoptype
-
-#starttype forest_region
-#field region , Ptr <forest_region_info>
 #field color[0] , Word8
 #field color[1] , Word8
 #field color[2] , Word8
@@ -111,7 +100,10 @@ import Foreign.ForeignPtr
   -> CULong -> IO <result>
 
 #ccall image_tree_forest_get_regions , Ptr <image_tree_forest> \
-  -> Ptr <forest_region> -> IO <result>
+  -> Ptr (Ptr <forest_region_info>) -> IO <result>
+
+#ccall image_tree_forest_draw_image , Ptr <image_tree_forest> \
+  -> Ptr <pixel_image> -> CULong -> CULong -> IO <result>
 
 #ccall image_tree_root_update , Ptr <image_tree_root> -> IO <result>
 

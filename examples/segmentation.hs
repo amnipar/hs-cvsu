@@ -15,6 +15,7 @@ import CV.Pixelwise
 import Utils.Rectangle
 
 import ReadArgs
+import Control.Monad
 import System.IO.Unsafe
 import GHC.Float
 import Foreign.Ptr
@@ -42,6 +43,12 @@ fromCVImage img = do
   saveImage "temp.png" img
   withGenImage img $ \pimg ->
     fromIplImage (castPtr pimg)
+
+toCVImage :: PixelImage -> IO (Image RGB D8)
+toCVImage img = creatingImage $ toBareImage $ toIplImage img
+  where
+    toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
+    toBareImage = liftM castPtr
 
 colorList = concat $ repeat
   [ (0,0,1), (0,1,0), (1,0,0), (0,1,1), (1,0,1), (1,1,0)
@@ -72,9 +79,13 @@ drawRegions i ts =
           Nothing -> (0,0,0)
     regionColors ts cs = fst $ foldl assignColor ([],cs) $ filter ((/=0).classId) ts
 
-drawForestRegions :: [ForestRegion] -> Image RGB D32 -> Image RGB D32
+drawForestRegions :: [ForestRegion] -> Image RGB D8 -> Image RGB D32
 drawForestRegions rs img =
-  img <## [rectOp c 1 (mkRectangle (x,y) (w,h)) | (ForestRegion _ x y w h _ c) <- rs]
+  -- OpenCV uses BGR colors so must switch the order of RGB color components
+  fimg <## [rectOp (c3,c2,c1) 1 (mkRectangle (x,y) (w,h)) 
+    | (ForestRegion _ x y w h _ (c1,c2,c3)) <- rs]
+  where
+    fimg = unsafeImageTo32F img
 
 getTrees :: ImageTree a -> [ImageTree a]
 getTrees EmptyTree = []
@@ -116,6 +127,11 @@ drawBlocks img f =
       return [lineOp (1,0,0) 1 (tx+(tw`div`2),ty+(th`div`2)) (nx+(nw`div`2),ny+(nh`div`2))
         | n@ImageBlock{x=nx,y=ny,w=nw,h=nh} <- map block ns]
 
+drawForest :: String -> ImageForest Statistics -> IO ()
+drawForest file forest = do
+  fimg <- toCVImage =<< forestDrawImage True True forest
+  saveImage file fimg -- $ drawForestRegions rf fimg
+
 main = do
   (sourceFile, targetFile, size, sigma) <- readArgs
   -- print $ createMask g sigma 2
@@ -124,7 +140,10 @@ main = do
   forest <- createForest pimg (size,size)
   withForest forest $ \f -> do
     sf <- forestSegmentEntropy 4 f
-    rf <- forestRegionsGet sf
-    saveImage targetFile $ drawForestRegions rf $ drawRegions img $ concatMap getTrees $ trees sf
-    saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
-    saveImage "blocks.png" $ drawBlocks img sf
+    drawForest targetFile sf
+    --rf <- forestRegionsGet sf
+    --fimg <- toCVImage =<< forestDrawImage False False sf
+    --saveImage targetFile fimg -- $ drawForestRegions rf fimg
+    -- drawRegions img $ concatMap getTrees $ trees sf
+    --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
+    --saveImage "blocks.png" $ drawBlocks img sf
