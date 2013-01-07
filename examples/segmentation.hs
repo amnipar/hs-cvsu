@@ -50,43 +50,6 @@ toCVImage img = creatingImage $ toBareImage $ toIplImage img
     toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
     toBareImage = liftM castPtr
 
-colorList = concat $ repeat
-  [ (0,0,1), (0,1,0), (1,0,0), (0,1,1), (1,0,1), (1,1,0)
-  , (0.5,0.5,1), (0.5,1,0.5), (1,0.5,0.5), (1,0.5,1), (1,1,0.5)
-  , (0,0,0.75), (0,0.75,0), (0.75,0,0), (0,0.75,0.75), (0.75,0,0.75), (0.75,0.75,0)
-  , (0.25,0.25,0.75),(0.25,0.75,0.25),(0.75,0.25,0.25),(0.25,0.75,0.75),(0.75,0.25,0.75),(0.75,0.75,0.25)
-  , (0,0,0.5), (0,0.5,0), (0.5,0,0), (0,0.5,0.5), (0.5,0,0.5), (0.5,0.5,0)
-  , (0,0,0.25), (0,0.25,0), (0.25,0,0), (0,0.25,0.25), (0.25,0,0.25), (0.25,0.25,0)
-  ]
-
-drawRegions :: Image GrayScale D32 -> [ImageTree Statistics] -> Image RGB D32
-drawRegions i ts =
-  ri <## [rectOp (treeColor colors c) (-1)
-      (mkRectangle (x,y) (w-1,h-1)) |
-      ImageTree{classId=c,block=(ImageBlock x y w h _)} <- ts]
-  where
-    ri = grayToRGB i
-    colors = regionColors ts colorList
-    assignColor (ts,(c:cs)) t =
-      case (lookup (classId t) ts) of
-        Just rc -> (ts,(c:cs))
-        Nothing -> (((classId t),c):ts,cs)
-    treeColor cs cid
-      | cid == 0 = (0,0,0)
-      | otherwise = 
-        case (lookup cid cs) of
-          Just c  -> c
-          Nothing -> (0,0,0)
-    regionColors ts cs = fst $ foldl assignColor ([],cs) $ filter ((/=0).classId) ts
-
-drawForestRegions :: [ForestRegion] -> Image RGB D8 -> Image RGB D32
-drawForestRegions rs img =
-  -- OpenCV uses BGR colors so must switch the order of RGB color components
-  fimg <## [rectOp (c3,c2,c1) 1 (mkRectangle (x,y) (w,h)) 
-    | (ForestRegion _ x y w h _ (c1,c2,c3)) <- rs]
-  where
-    fimg = unsafeImageTo32F img
-
 getTrees :: ImageTree a -> [ImageTree a]
 getTrees EmptyTree = []
 getTrees t
@@ -94,6 +57,14 @@ getTrees t
   | otherwise = cs
   where
     cs = concatMap getTrees [nw t, ne t, sw t, se t]
+
+drawForestRegions :: [ForestRegion] -> Image RGB D8 -> Image RGB D32
+drawForestRegions rs img =
+  -- OpenCV uses BGR colors so must switch the order of RGB color components
+  fimg <## [rectOp (c3,c2,c1) 1 (mkRectangle (x,y) (w,h))
+    | (ForestRegion _ x y w h _ (c1,c2,c3)) <- rs]
+  where
+    fimg = unsafeImageTo32F img
 
 drawRects :: Image GrayScale D32 -> [ImageTree a] -> Image RGB D32
 drawRects i ts =
@@ -130,20 +101,18 @@ drawBlocks img f =
 drawForest :: String -> ImageForest Statistics -> IO ()
 drawForest file forest = do
   fimg <- toCVImage =<< forestDrawImage True True forest
+  --rf <- forestRegionsGet forest
   saveImage file fimg -- $ drawForestRegions rf fimg
 
 main = do
-  (sourceFile, targetFile, size, sigma) <- readArgs
-  -- print $ createMask g sigma 2
+  (sourceFile, targetFile, sigma, size, minSize, alpha, treeDiff, regionDiff) <- readArgs
+  --(sourceFile, targetFile, sigma, size, minSize, threshold, alpha) <- readArgs
   img <- readFromFile sourceFile
   pimg <- fromCVImage $ gaussianSmooth sigma 2 img
   forest <- createForest pimg (size,size)
   withForest forest $ \f -> do
-    sf <- forestSegmentEntropy 4 f
+    sf <- forestSegmentEntropy minSize alpha treeDiff regionDiff f
+    --sf <- forestSegmentDeviation threshold minSize alpha f
     drawForest targetFile sf
-    --rf <- forestRegionsGet sf
-    --fimg <- toCVImage =<< forestDrawImage False False sf
-    --saveImage targetFile fimg -- $ drawForestRegions rf fimg
-    -- drawRegions img $ concatMap getTrees $ trees sf
     --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
     --saveImage "blocks.png" $ drawBlocks img sf

@@ -94,10 +94,10 @@ import Foreign.ForeignPtr
 #ccall image_tree_forest_update , Ptr <image_tree_forest> -> IO <result>
 
 #ccall image_tree_forest_segment_with_deviation , Ptr <image_tree_forest> \
-  -> CDouble -> CULong -> IO <result>
+  -> CDouble -> CULong -> CDouble -> IO <result>
 
 #ccall image_tree_forest_segment_with_entropy , Ptr <image_tree_forest> \
-  -> CULong -> IO <result>
+  -> CULong -> CDouble -> CDouble -> CDouble -> IO <result>
 
 #ccall image_tree_forest_get_regions , Ptr <image_tree_forest> \
   -> Ptr (Ptr <forest_region_info>) -> IO <result>

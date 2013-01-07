@@ -425,19 +425,27 @@ forestSegment minSize isConsistent isEq f = do
         cs `seq` segment (ts ++ cs)
       | otherwise = segment ts
 
-forestSegmentDeviation :: (ForestValue a) => Double -> Int 
-  -> ImageForest a -> IO (ImageForest a)
-forestSegmentDeviation t minSize f =
+forestSegmentDeviation :: (ForestValue a) => Double -> Int -> Double
+    -> ImageForest a -> IO (ImageForest a)
+forestSegmentDeviation threshold minSize alpha f =
   withForeignPtr (forestPtr f) $ \pforest -> do
-    r <- c'image_tree_forest_segment_with_deviation pforest (realToFrac t) (fromIntegral minSize)
+    r <- c'image_tree_forest_segment_with_deviation pforest
+        (realToFrac threshold)
+        (fromIntegral minSize)
+        (realToFrac alpha)
     if r /= c'SUCCESS
        then error $ "forestSegmentDeviation failed with " ++ (show r)
        else refreshForest f
 
-forestSegmentEntropy :: (ForestValue a) => Int -> ImageForest a -> IO (ImageForest a)
-forestSegmentEntropy minSize f =
+forestSegmentEntropy :: (ForestValue a) => Int -> Double -> Double -> Double
+    -> ImageForest a -> IO (ImageForest a)
+forestSegmentEntropy minSize alpha treeDiff regionDiff f =
   withForeignPtr (forestPtr f) $ \pforest -> do
-    r <- c'image_tree_forest_segment_with_entropy pforest (fromIntegral minSize)
+    r <- c'image_tree_forest_segment_with_entropy pforest
+        (fromIntegral minSize)
+        (realToFrac alpha)
+        (realToFrac treeDiff)
+        (realToFrac regionDiff)
     if r /= c'SUCCESS
        then error $ "forestSegmentEntropy failed with " ++ (show r)
        else refreshForest f
@@ -476,7 +484,7 @@ forestDrawImage useRegions useColors forest = do
   fimg <- allocPixelImage
   withForeignPtr fimg $ \pimg ->
     withForeignPtr (forestPtr forest) $ \pforest -> do
-      r <- c'image_tree_forest_draw_image 
+      r <- c'image_tree_forest_draw_image
         pforest
         pimg
         (if useRegions then 1 else 0)
