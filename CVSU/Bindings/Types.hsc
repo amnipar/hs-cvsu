@@ -7,6 +7,8 @@ module CVSU.Bindings.Types where
 
 import Foreign.Ptr
 
+#integral_t truth_value
+
 -- direction type and enum values
 
 #integral_t direction

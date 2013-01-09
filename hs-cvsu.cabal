@@ -19,21 +19,21 @@ Cabal-version:       >=1.8
 Library
   Exposed-modules:
     CVSU.Types
+    CVSU.List
     CVSU.PixelImage
+    CVSU.ConnectedComponents
     CVSU.Integral
     CVSU.Edges
-    CVSU.List
-    CVSU.ImageTree
-    CVSU.ConnectedComponents
+    CVSU.QuadForest
     CVSU.OpenCV
   Other-Modules:
     CVSU.Bindings.Types
+    CVSU.Bindings.List
     CVSU.Bindings.PixelImage
+    CVSU.Bindings.ConnectedComponents
     CVSU.Bindings.Integral
     CVSU.Bindings.Edges
-    CVSU.Bindings.List
-    CVSU.Bindings.ImageTree
-    CVSU.Bindings.ConnectedComponents
+    CVSU.Bindings.QuadForest
     CVSU.Bindings.OpenCV
   Extensions:
     ForeignFunctionInterface
@@ -66,40 +66,40 @@ Library
     c/cvsu_memory.h,
     c/cvsu_output.h,
     c/cvsu_types.h,
-    c/cvsu_basic.h,
-    c/cvsu_filter.h,
-    c/cvsu_edges.h,
-    c/cvsu_opencv.h,
-    c/cvsu_integral.h,
     c/cvsu_list.h,
-    c/cvsu_image_tree.h,
-    c/cvsu_connected_components.h
+    c/cvsu_basic.h,
+    c/cvsu_connected_components.h,
+    c/cvsu_filter.h,
+    c/cvsu_integral.h,
+    c/cvsu_edges.h,
+    c/cvsu_quad_forest.h,
+    c/cvsu_opencv.h
   Install-includes:
     c/cvsu_config.h,
     c/cvsu_macros.h,
     c/cvsu_memory.h,
     c/cvsu_output.h,
     c/cvsu_types.h,
-    c/cvsu_basic.h,
-    c/cvsu_filter.h,
-    c/cvsu_edges.h,
-    c/cvsu_opencv.h,
-    c/cvsu_integral.h,
     c/cvsu_list.h,
-    c/cvsu_image_tree.h,
-    c/cvsu_connected_components.h
+    c/cvsu_basic.h,
+    c/cvsu_connected_components.h,
+    c/cvsu_filter.h,
+    c/cvsu_integral.h,
+    c/cvsu_edges.h,
+    c/cvsu_quad_forest.h,
+    c/cvsu_opencv.h
   C-sources:
     c/cvsu_memory.c,
     c/cvsu_output.c,
     c/cvsu_types.c,
-    c/cvsu_basic.c,
-    c/cvsu_filter.c,
-    c/cvsu_edges.c,
-    c/cvsu_opencv.c,
-    c/cvsu_integral.c,
     c/cvsu_list.c,
-    c/cvsu_image_tree.c,
-    c/cvsu_connected_components.c
+    c/cvsu_basic.c,
+    c/cvsu_connected_components.c,
+    c/cvsu_filter.c,
+    c/cvsu_integral.c,
+    c/cvsu_edges.c,
+    c/cvsu_quad_forest.c,
+    c/cvsu_opencv.c
 
 source-repository head
   type:     git

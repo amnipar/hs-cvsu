@@ -44,3 +44,4 @@ main = do
   cimg <- drawConnectedComponents comp
   img <- toCVImage cimg
   saveImage targetFile $ drawComponentRects img comp
+  saveImage "feng.png" =<< toCVImage timg

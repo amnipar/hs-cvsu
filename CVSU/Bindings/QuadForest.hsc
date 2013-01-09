@@ -1,7 +1,7 @@
 #include <bindings.dsl.h>
-#include "cvsu_image_tree.h"
+#include "cvsu_quad_forest.h"
 
-module CVSU.Bindings.ImageTree where
+module CVSU.Bindings.QuadForest where
 
 #strict_import
 
@@ -14,126 +14,103 @@ import Foreign.C.String
 import Foreign.Ptr
 import Foreign.ForeignPtr
 
-#starttype forest_region_info
-#field id   , Ptr <forest_region_info>
-#field rank , CULong
-#field x1   , CULong
-#field y1   , CULong
-#field x2   , CULong
-#field y2   , CULong
-#field stat , <statistics>
+#starttype quad_forest_segment
+#field parent   , Ptr <quad_forest_segment>
+#field rank     , CULong
+#field x1       , CULong
+#field y1       , CULong
+#field x2       , CULong
+#field y2       , CULong
+#field stat     , <statistics>
 #field color[0] , Word8
 #field color[1] , Word8
 #field color[2] , Word8
 #stoptype
 
-#starttype image_tree
-#field root        , Ptr <image_tree_root>
-#field parent      , Ptr <image_tree>
-#field nw          , Ptr <image_tree>
-#field ne          , Ptr <image_tree>
-#field sw          , Ptr <image_tree>
-#field se          , Ptr <image_tree>
-#field block       , Ptr <image_block>
-#field n           , Ptr <image_tree>
-#field e           , Ptr <image_tree>
-#field s           , Ptr <image_tree>
-#field w           , Ptr <image_tree>
+#starttype quad_tree
+#field x           , CULong
+#field y           , CULong
+#field size        , CULong
 #field level       , CULong
-#field region_info , <forest_region_info>
+#field stat        , <statistics>
+#field segment     , <quad_forest_segment>
+#field parent      , Ptr <quad_tree>
+#field nw          , Ptr <quad_tree>
+#field ne          , Ptr <quad_tree>
+#field sw          , Ptr <quad_tree>
+#field se          , Ptr <quad_tree>
+#field n           , Ptr <quad_tree>
+#field e           , Ptr <quad_tree>
+#field s           , Ptr <quad_tree>
+#field w           , Ptr <quad_tree>
 #stoptype
 
-#starttype image_tree_root
-#field ROI    , <pixel_image>
-#field I      , <integral_image>
-#field box    , <small_integral_image_box>
-#field forest , Ptr <image_tree_forest>
-#field tree   , Ptr <image_tree>
-#stoptype
-
-#starttype image_tree_forest
+#starttype quad_forest
 #field original        , Ptr <pixel_image>
 #field source          , Ptr <pixel_image>
 #field integral        , <integral_image>
 #field rows            , CULong
 #field cols            , CULong
-#field regions         , CULong
-#field tree_width      , CULong
-#field tree_height     , CULong
+#field segments        , CULong
+#field tree_max_size   , CULong
+#field tree_min_size   , CULong
 #field dx              , CULong
 #field dy              , CULong
-#field type            , <image_block_type>
 #field trees           , <list>
-#field blocks          , <list>
-#field values          , <list>
-#field last_base_tree  , Ptr <list_item>
-#field last_base_block , Ptr <list_item>
-#field last_base_value , Ptr <list_item>
-#field roots           , Ptr <image_tree_root>
+#field last_root_tree  , Ptr <list_item>
+#field roots           , Ptr (Ptr <quad_tree>)
 #stoptype
 
+#ccall quad_tree_nullify , Ptr <quad_tree> -> IO <result>
 
-#ccall image_tree_forest_alloc , IO (Ptr <image_tree_forest>)
+#ccall quad_tree_is_null , Ptr <quad_tree> -> IO <truth_value>
 
-#ccall image_tree_forest_free , Ptr <image_tree_forest> -> IO ()
+#ccall quad_forest_alloc , IO (Ptr <quad_forest>)
 
-#ccall image_tree_forest_create , Ptr <image_tree_forest> -> \
-  Ptr <pixel_image> -> CUShort -> CUShort -> <image_block_type> -> IO <result>
+#ccall quad_forest_free , Ptr <quad_forest> -> IO ()
 
-#ccall image_tree_forest_reload , Ptr <image_tree_forest> -> \
-  CUShort -> CUShort -> <image_block_type> -> IO <result>
+#ccall quad_forest_create , Ptr <quad_forest> -> Ptr <pixel_image> \
+  -> CULong -> CULong -> IO <result>
 
-#ccall image_tree_forest_destroy , Ptr <image_tree_forest> -> IO <result>
+#ccall quad_forest_reload , Ptr <quad_forest> ->  CULong -> CULong \
+  -> IO <result>
 
-#ccall image_tree_forest_nullify , Ptr <image_tree_forest> -> IO <result>
+#ccall quad_forest_destroy , Ptr <quad_forest> -> IO <result>
 
-#ccall image_tree_forest_is_null , Ptr <image_tree_forest> -> IO (CULong)
+#ccall quad_forest_nullify , Ptr <quad_forest> -> IO <result>
 
-#ccall image_tree_forest_update_prepare , Ptr <image_tree_forest> -> IO <result>
+#ccall quad_forest_is_null , Ptr <quad_forest> -> IO <truth_value>
 
-#ccall image_tree_forest_update , Ptr <image_tree_forest> -> IO <result>
+#ccall quad_forest_update , Ptr <quad_forest> -> IO <result>
 
-#ccall image_tree_forest_segment_with_deviation , Ptr <image_tree_forest> \
-  -> CDouble -> CULong -> CDouble -> IO <result>
+#ccall quad_forest_segment_with_deviation , Ptr <quad_forest> \
+  -> CDouble -> CDouble -> IO <result>
 
-#ccall image_tree_forest_segment_with_entropy , Ptr <image_tree_forest> \
-  -> CULong -> CDouble -> CDouble -> CDouble -> IO <result>
+#ccall quad_forest_segment_with_overlap , Ptr <quad_forest> \
+  -> CDouble -> CDouble -> CDouble -> IO <result>
 
-#ccall image_tree_forest_get_regions , Ptr <image_tree_forest> \
-  -> Ptr (Ptr <forest_region_info>) -> IO <result>
+#ccall quad_forest_get_segments , Ptr <quad_forest> \
+  -> Ptr (Ptr <quad_forest_segment>) -> IO <result>
 
-#ccall image_tree_forest_draw_image , Ptr <image_tree_forest> \
-  -> Ptr <pixel_image> -> CULong -> CULong -> IO <result>
+#ccall quad_forest_draw_image , Ptr <quad_forest> -> Ptr <pixel_image> \
+  -> <truth_value> -> <truth_value> -> IO <result>
 
-#ccall image_tree_root_update , Ptr <image_tree_root> -> IO <result>
+#ccall quad_tree_divide , Ptr <quad_forest> -> Ptr <quad_tree> -> IO <result>
 
-#ccall image_tree_update , Ptr <image_tree> -> IO <result>
+#ccall quad_tree_has_children , Ptr <quad_tree> -> IO <truth_value>
 
-#ccall image_tree_divide , Ptr <image_tree> -> IO <result>
+#ccall quad_tree_get_child_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr <quad_tree> -> IO <result>
 
-#ccall image_tree_get_child_statistics , Ptr <image_tree> -> Ptr <statistics> \
-  -> Ptr <image_block> -> IO <result>
+#ccall quad_tree_divide_with_overlap , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> CDouble -> CDouble -> IO <result>
 
-#ccall image_tree_create_neighbor_list , Ptr <list> -> IO <result>
+#ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 
-#ccall image_tree_get_direct_neighbor , Ptr <image_tree> -> Ptr <image_tree> -> <direction> -> IO <result>
+#ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()
 
-#ccall image_tree_get_direct_neighbor_n , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
+#ccall quad_tree_segment_find , Ptr <quad_tree> -> IO (Ptr <quad_forest_segment>)
 
-#ccall image_tree_get_direct_neighbor_e , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
+#ccall quad_tree_segment_get , Ptr <quad_tree> -> IO (CULong)
 
-#ccall image_tree_get_direct_neighbor_s , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
-
-#ccall image_tree_get_direct_neighbor_w , Ptr <image_tree> -> Ptr <image_tree> -> IO <result>
-
-#ccall image_tree_find_all_immediate_neighbors , Ptr <list> -> Ptr <image_tree> -> IO <result>
-
-#ccall image_tree_class_create , Ptr <image_tree> -> IO ()
-
-#ccall image_tree_class_union , Ptr <image_tree> -> Ptr <image_tree> -> IO ()
-
-#ccall image_tree_class_find , Ptr <forest_region_info> -> IO (Ptr <forest_region_info>)
-
-#ccall image_tree_class_get , Ptr <image_tree> -> IO (CULong)
-
-#ccall image_tree_is_class_parent , Ptr <image_tree> -> IO (CULong)
+#ccall quad_tree_is_segment_parent , Ptr <quad_tree> -> IO <truth_value>
