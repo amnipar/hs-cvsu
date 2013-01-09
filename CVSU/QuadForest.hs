@@ -112,7 +112,7 @@ quadForestAlloc = do
     else error "Memory allocation failed in quadForestAlloc"
 
 quadForestInit :: PixelImage -> Int -> Int -> IO QuadForest
-quadForestInit i maxSize minSize =
+quadForestInit i maxSize minSize = do
   fforest <- quadForestAlloc
   withForeignPtr fforest $ \pforest ->
     withForeignPtr (imagePtr i) $ \pimage -> do
@@ -124,10 +124,10 @@ quadForestInit i maxSize minSize =
             c'quad_forest'rows = r,
             c'quad_forest'cols = c,
             c'quad_forest'segments = s,
-            c'quad_forest'max_size = smax,
-            c'quad_forest'min_size = smin,
+            c'quad_forest'tree_max_size = smax,
+            c'quad_forest'tree_min_size = smin,
             c'quad_forest'dx = dx,
-            c'quad_forest'dy = dy,
+            c'quad_forest'dy = dy
           } <- peek pforest
           return $ QuadForest fforest i
             (fromIntegral r)
@@ -169,13 +169,13 @@ quadForestRefresh f =
       c'quad_forest'rows = r,
       c'quad_forest'cols = c,
       c'quad_forest'segments = s,
-      c'quad_forest'max_size = smax,
-      c'quad_forest'min_size = smin,
+      c'quad_forest'tree_max_size = smax,
+      c'quad_forest'tree_min_size = smin,
       c'quad_forest'dx = dx,
       c'quad_forest'dy = dy,
       c'quad_forest'roots = proots
     } <- peek pforest
-    rs <- peekArray (r*c) proots
+    rs <- peekArray (fromIntegral $ r*c) proots
     ts <- mapM quadTreeFromPtr rs
     return $ QuadForest
       (quadForestPtr f)
@@ -191,7 +191,7 @@ quadForestRefresh f =
 
 quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
 quadTreeFromPtr ptree
-  | ptree == nullPtr = return EmptyTree
+  | ptree == nullPtr = return EmptyQuadTree
   | otherwise        = do
     C'quad_tree{
       c'quad_tree'x = x,
@@ -208,7 +208,7 @@ quadTreeFromPtr ptree
     tne <- quadTreeFromPtr ne
     tsw <- quadTreeFromPtr sw
     tse <- quadTreeFromPtr se
-    return $ ImageTree ptree
+    return $ QuadTree ptree
       (fromIntegral x)
       (fromIntegral y)
       (fromIntegral s)
@@ -217,7 +217,7 @@ quadTreeFromPtr ptree
       tnw tne tsw tse
 
 withQuadForest :: QuadForest -> (QuadForest -> IO a) -> IO a
-withForest f op =
+withQuadForest f op =
   withForeignPtr (quadForestPtr f) $ \_ -> do
     r <- op f
     touchForeignPtr (quadForestPtr f)
@@ -226,7 +226,7 @@ withForest f op =
 -- | Extract the given root tree from the forest
 quadForestGetTree :: QuadForest -> (Int,Int) -> IO QuadTree
 quadForestGetTree f (x,y) =
-  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
     forest <- peek pforest
     root <- peek $ advancePtr (c'quad_forest'roots forest) (y * (quadForestCols f) + x)
     quadTreeFromPtr root
@@ -273,11 +273,11 @@ quadTreeFromListItem pitem = do
 quadTreeNeighbors :: QuadTree -> IO [QuadTree]
 quadTreeNeighbors t = do
   ct <- peek $ quadTreePtr t
-  filterM (liftM (/=EmptyQuadTree)) $ mapM quadTreeFromPtr
-    [ c'quad_tree'n ct
-    , c'quad_tree'e ct
-    , c'quad_tree's ct
-    , c'quad_tree's ct ]
+  n <- quadTreeFromPtr $ c'quad_tree'n ct
+  e <- quadTreeFromPtr $ c'quad_tree'e ct
+  s <- quadTreeFromPtr $ c'quad_tree's ct
+  w <- quadTreeFromPtr $ c'quad_tree'w ct
+  return $ filter (/=EmptyQuadTree) [n, e, s, w]
 
 -- | Initializes a disjunctive set for the tree by setting the parent to
 --   self and rank to zero.
@@ -295,7 +295,9 @@ quadTreeSegmentInit t = do
 quadTreeSegmentUnion :: (QuadTree,QuadTree) -> IO (QuadTree,QuadTree)
 quadTreeSegmentUnion (t1,t2) = do
   c'quad_tree_segment_union (quadTreePtr t1) (quadTreePtr t2)
-  return $! (quadTreeFromPtr $ quadTreePtr t1, quadTreeFromPtr $ quadTreePtr t2)
+  t1' <- quadTreeFromPtr $ quadTreePtr t1
+  t2' <- quadTreeFromPtr $ quadTreePtr t2
+  return $! (t1,t2)
 
 -- | Find part of the Union-Find disjunctive set algorithm. Finds the pointer
 --   of the parent tree, caches it in the c structure, and creates an Integer
@@ -316,8 +318,8 @@ quadTreeSegmentFind t = do
 --   tree list in consistent state, and in the current form, the algorithm is
 --   not safe to parallelize (though in future it probably will be). Also the
 --   resulting Haskell data structure is not persistent (may be later).
-quadForestSegment :: Int -> (QuadTree -> Bool)
-  -> (QuadTree -> QuadTree -> Bool) -> QuadForest -> IO QuadForest
+quadForestSegment :: (QuadTree -> Bool) -> (QuadTree -> QuadTree -> Bool)
+    -> QuadForest -> IO QuadForest
 quadForestSegment isConsistent isEq f = do
   ts <- segment $ quadForestTrees f
   ts `seq` quadForestRefresh f
@@ -338,7 +340,7 @@ quadForestSegment isConsistent isEq f = do
         rs <- unionWithNeighbors t
         rs `seq` segment ts
       | quadTreeSize t > minSize = do
-        cs <- quadTreeDivide t
+        cs <- quadTreeDivide f t
         cs `seq` segment (ts ++ cs)
       | otherwise = segment ts
 
@@ -375,7 +377,7 @@ quadForestGetSegments f =
       readSegment :: Ptr C'quad_forest_segment -> IO (ForestSegment)
       readSegment pregion = do
         (C'quad_forest_segment p _ x1 y1 x2 y2 stat c1 c2 c3) <- peek pregion
-        return $ ForestRegion
+        return $ ForestSegment
           (fromIntegral $ ptrToWordPtr p)
           (fromIntegral x1)
           (fromIntegral y1)
@@ -386,13 +388,13 @@ quadForestGetSegments f =
     ptarget <- allocTargetArray
     c'quad_forest_get_segments pforest ptarget
     target <- (peekArray targetSize ptarget)
-    mapM readRegion target
+    mapM readSegment target
 
 -- | Draws an image of the forest using the current division and region info.
 --   Information from regions or individual trees will be used (based on
 --   parameter useRegions) and either the mean intensity of the whole region or
 --   the assigned color of the region can be used (based on parameter useColors).
-quadForestDrawImage :: Bool -> Bool -> ImageForest a -> IO (PixelImage)
+quadForestDrawImage :: Bool -> Bool -> QuadForest -> IO (PixelImage)
 quadForestDrawImage useRegions useColors forest = do
   fimg <- allocPixelImage
   withForeignPtr fimg $ \pimg ->

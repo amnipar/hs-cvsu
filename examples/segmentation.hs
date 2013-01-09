@@ -3,7 +3,7 @@ module Main where
 
 import CVSU.Types
 import CVSU.PixelImage
-import CVSU.ImageTree
+import CVSU.QuadForest
 import CVSU.OpenCV
 
 import CV.Image
@@ -50,57 +50,61 @@ toCVImage img = creatingImage $ toBareImage $ toIplImage img
     toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
     toBareImage = liftM castPtr
 
-getTrees :: ImageTree a -> [ImageTree a]
-getTrees EmptyTree = []
+getTrees :: QuadTree -> [QuadTree]
+getTrees EmptyQuadTree = []
 getTrees t
   | null cs = [t]
   | otherwise = cs
   where
-    cs = concatMap getTrees [nw t, ne t, sw t, se t]
+    cs = concatMap getTrees $
+      [ quadTreeChildNW t
+      , quadTreeChildNE t
+      , quadTreeChildSW t
+      , quadTreeChildSE t ]
 
-drawForestRegions :: [ForestRegion] -> Image RGB D8 -> Image RGB D32
+drawForestRegions :: [ForestSegment] -> Image RGB D8 -> Image RGB D32
 drawForestRegions rs img =
   -- OpenCV uses BGR colors so must switch the order of RGB color components
   fimg <## [rectOp (c3,c2,c1) 1 (mkRectangle (x,y) (w,h))
-    | (ForestRegion _ x y w h _ (c1,c2,c3)) <- rs]
+    | (ForestSegment _ x y w h _ (c1,c2,c3)) <- rs]
   where
     fimg = unsafeImageTo32F img
 
-drawRects :: Image GrayScale D32 -> [ImageTree a] -> Image RGB D32
+drawRects :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
 drawRects i ts =
   ri
-  <## [rectOp (0,1,1) 1 r | r <- map (toRect.block) ts]
+  <## [rectOp (0,1,1) 1 r | r <- map toRect ts]
   where
     ri = grayToRGB i
-    toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
+    toRect (QuadTree _ x y s _ _ _ _ _ _) = mkRectangle (x,y) (s,s)
 
-drawBlocks :: Image GrayScale D32 -> ImageForest Statistics -> Image RGB D32
+drawBlocks :: Image GrayScale D32 -> QuadForest -> Image RGB D32
 drawBlocks img f =
   rimg
   -- <## [rectOp (0,1,1) (-1) r | r <- map toRect $ filter ((>avgDev) . statDev . T.value) $ map block ts]
-  <## [rectOp (toColor m 255) (-1) r | (r,m) <- map toRect $ filter s $ map block ts]
-  <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map ((toCircle maxD).block) $ trees f]
+  <## [rectOp (toColor m 255) (-1) r | (r,m) <- map toRect $ filter s ts]
+  <## [circleOp (0,1,1) (x,y) r (Stroked 1) | (x,y,r) <- map (toCircle maxD) $ quadForestTrees f]
   <## concat [unsafePerformIO $ nlines t | t <- ts]
   where
     rimg = grayToRGB img
-    ts = concatMap getTrees $ trees f
-    maxM = maximum $ map (mean . value . block) ts
-    maxD = maximum $ map (deviation . value . block) $ trees f
+    ts = concatMap getTrees $ quadForestTrees f
+    maxM = maximum $ map (mean . quadTreeStat) ts
+    maxD = maximum $ map (deviation . quadTreeStat) $ quadForestTrees f
 
     toColor m maxM = (c,c,c) where c = double2Float $ m / maxM
     -- toRect (ImageBlock x y w h _) = mkRectangle (x,y) (w,h)
-    s (ImageBlock _ _ w h _) = True -- (w == 1) && (h == 1)
-    toRect (ImageBlock x y w h v) = (mkRectangle (x,y) (w,h), mean v)
-    toCircle maxD (ImageBlock x y w h v) =
-      (x+(w`div`2), y+(h`div`2), round $ (min maxD $ deviation v) / maxD * (fromIntegral w))
-    nlines t@ImageTree{block=ImageBlock{x=tx,y=ty,w=tw,h=th}} = do
-      (ns::[ImageTree Statistics]) <- treeNeighbors t
-      return [lineOp (1,0,0) 1 (tx+(tw`div`2),ty+(th`div`2)) (nx+(nw`div`2),ny+(nh`div`2))
-        | n@ImageBlock{x=nx,y=ny,w=nw,h=nh} <- map block ns]
+    s t = True -- (w == 1) && (h == 1)
+    toRect (QuadTree _ x y s _ v _ _ _ _) = (mkRectangle (x,y) (s,s), mean v)
+    toCircle maxD (QuadTree _ x y s _ v _ _ _ _) =
+      (x+(s`div`2), y+(s`div`2), round $ (min maxD $ deviation v) / maxD * (fromIntegral s))
+    nlines t@(QuadTree _ tx ty ts _ _ _ _ _ _) = do
+      (ns::[QuadTree]) <- quadTreeNeighbors t
+      return [lineOp (1,0,0) 1 (tx+(ts`div`2),ty+(ts`div`2)) (nx+(nd`div`2),ny+(nd`div`2))
+          | n@(QuadTree _ nx ny nd _ _ _ _ _ _) <- ns]
 
-drawForest :: String -> ImageForest Statistics -> IO ()
+drawForest :: String -> QuadForest -> IO ()
 drawForest file forest = do
-  fimg <- toCVImage =<< forestDrawImage True True forest
+  fimg <- toCVImage =<< quadForestDrawImage True True forest
   --rf <- forestRegionsGet forest
   saveImage file fimg -- $ drawForestRegions rf fimg
 
@@ -109,9 +113,9 @@ main = do
   --(sourceFile, targetFile, sigma, size, minSize, threshold, alpha) <- readArgs
   img <- readFromFile sourceFile
   pimg <- fromCVImage $ gaussianSmooth sigma 2 img
-  forest <- createForest pimg (size,size)
-  withForest forest $ \f -> do
-    sf <- forestSegmentEntropy minSize alpha treeDiff regionDiff f
+  forest <- quadForestCreate pimg size minSize
+  withQuadForest forest $ \f -> do
+    sf <- quadForestSegmentByOverlap alpha treeDiff regionDiff f
     --sf <- forestSegmentDeviation threshold minSize alpha f
     drawForest targetFile sf
     --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
