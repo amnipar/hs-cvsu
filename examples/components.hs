@@ -6,6 +6,7 @@ import CVSU.ConnectedComponents
 import CVSU.OpenCV
 
 import CV.Image
+import CV.Morphology
 import CV.Drawing
 import CV.ImageOp
 import Utils.Rectangle
@@ -15,6 +16,12 @@ import Foreign.Ptr
 import Control.Monad
 import System.IO.Unsafe
 import Debug.Trace
+
+fromCVImage :: Image GrayScale D8 -> IO (PixelImage)
+fromCVImage img = do
+  saveImage "temp.png" img
+  withGenImage img $ \pimg ->
+    fromIplImage (castPtr pimg)
 
 toCVImageG :: PixelImage -> IO (Image GrayScale D8)
 toCVImageG img = creatingImage $ toBareImage $ toIplImage img
@@ -39,9 +46,16 @@ main = do
   (sourceFile, targetFile, size) <- readArgs
   pimg <- readPixelImage sourceFile
   int <- createIntegralImage pimg
-  timg <- integralThresholdFeng size 0.5 int
-  comp <- createConnectedComponents timg
+  timg <- integralThresholdFeng True True 3 size 3 int
+  t <- toCVImageG timg
+  ci <- fromCVImage $ c t
+  comp <- createConnectedComponents ci
   cimg <- drawConnectedComponents comp
   img <- toCVImage cimg
   saveImage targetFile $ drawComponentRects img comp
   saveImage "feng.png" =<< toCVImage timg
+  saveImage "close.png" $ c t
+  where
+    c t = unsafeImageTo8Bit $ erode se5 2 $ dilate se5 1 $ unsafeImageTo32F t
+    se5 = structuringElement (5,5) (2,2) RectShape
+    se7 = structuringElement (7,7) (3,3) RectShape

@@ -108,15 +108,31 @@ drawForest file forest = do
   --rf <- forestRegionsGet forest
   saveImage file fimg -- $ drawForestRegions rf fimg
 
+treeEdge :: QuadForest -> Double -> QuadTree -> IO (Rectangle Int, Float)
+treeEdge f m t = do
+  nstat <- quadTreeNeighborhoodStat f m t
+  return (toRect t, double2Float $ (deviation $ quadTreeStat t) / (deviation nstat))
+  where
+    toRect (QuadTree _ x y s _ _ _ _ _ _) = mkRectangle (x,y) (s,s)
+
+drawEdges :: Image GrayScale D32 -> [(Rectangle Int, Float)] -> Image GrayScale D32
+drawEdges img es =
+  img
+  <## [rectOp (e/maxE) (-1) r | (r,e) <- es]
+  where
+    maxE = maximum $ map snd es
+
 main = do
-  (sourceFile, targetFile, sigma, size, minSize, alpha, treeDiff, regionDiff) <- readArgs
+  (sourceFile, targetFile, size, minSize, alpha, treeDiff, regionDiff) <- readArgs
   --(sourceFile, targetFile, sigma, size, minSize, threshold, alpha) <- readArgs
   img <- readFromFile sourceFile
-  pimg <- fromCVImage $ gaussianSmooth sigma 2 img
+  pimg <- fromCVImage $ unsafeImageTo8Bit img -- $ gaussianSmooth sigma 2 img
   forest <- quadForestCreate pimg size minSize
   withQuadForest forest $ \f -> do
     sf <- quadForestSegmentByOverlap alpha treeDiff regionDiff f
     --sf <- forestSegmentDeviation threshold minSize alpha f
     drawForest targetFile sf
-    --saveImage "rects.png" $ drawRects img $ concatMap getTrees $ trees sf
-    --saveImage "blocks.png" $ drawBlocks img sf
+    es <- mapM (treeEdge sf 3) $ concatMap getTrees $ quadForestTrees sf
+    saveImage "edges.png" $ drawEdges img es
+    saveImage "rects.png" $ drawRects img $ concatMap getTrees $ quadForestTrees sf
+    saveImage "blocks.png" $ drawBlocks img sf

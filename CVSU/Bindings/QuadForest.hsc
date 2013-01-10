@@ -102,6 +102,9 @@ import Foreign.ForeignPtr
 #ccall quad_tree_get_child_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> Ptr <quad_tree> -> IO <result>
 
+#ccall quad_tree_get_neighborhood_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr <statistics> -> CDouble -> IO <result>
+
 #ccall quad_tree_divide_with_overlap , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> CDouble -> CDouble -> IO <result>
 

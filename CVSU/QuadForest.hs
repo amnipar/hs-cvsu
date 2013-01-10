@@ -10,6 +10,7 @@ module CVSU.QuadForest
 , withQuadForest
 , quadForestGetTree
 , quadTreeChildStat
+, quadTreeNeighborhoodStat
 , quadTreeDivide
 , quadTreeNeighbors
 , quadTreeSegmentInit
@@ -36,6 +37,7 @@ import Foreign.C.String
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
+import Foreign.Marshal
 import Foreign.Marshal.Array
 import Foreign.Concurrent
 import System.IO.Unsafe
@@ -244,6 +246,19 @@ quadTreeChildStat f t =
       else do
         children <- (peekArray 4 pchildren)
         return $ map (hStatistics.c'quad_tree'stat) children
+
+quadTreeNeighborhoodStat :: QuadForest -> Double -> QuadTree -> IO Statistics
+quadTreeNeighborhoodStat f m t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+      stat = C'statistics 0 0 0 0 0 0
+    with stat $ \pstat -> do
+      r <- c'quad_tree_get_neighborhood_statistics pforest (quadTreePtr t) pstat (realToFrac m)
+      if r /= c'SUCCESS
+         then error $ "Get neighborhood statistics failed with " ++ (show r)
+         else do
+           nstat <- peek pstat
+           return $ hStatistics nstat
 
 -- | Divides the tree in four equal parts in quad-tree fashion. Causes side
 --   effects as the original tree will have four child trees after this

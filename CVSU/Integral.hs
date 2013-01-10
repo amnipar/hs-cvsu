@@ -97,22 +97,35 @@ integralStatisticsByRadius int r (cx,cy) = integralStatisticsByRect int (cx-r,cy
   where
     s = 2 * r + 1
 
-integralThresholdSauvola :: Int -> Double -> IntegralImage -> IO (PixelImage)
-integralThresholdSauvola r k int = do
+integralThresholdSauvola :: Bool -> Bool -> Bool -> Double -> Int -> Double 
+    -> IntegralImage -> IO (PixelImage)
+integralThresholdSauvola invert useMean findR r radius k int = do
   fimg <- allocPixelImage
   withForeignPtr (integralPtr int) $ \pint -> do
     withForeignPtr fimg $ \pimg -> do
-      r <- c'integral_image_threshold_sauvola pint pimg (fromIntegral r) (realToFrac k)
+      r <- c'integral_image_threshold_sauvola pint pimg 
+          (cBool invert)
+          (fromIntegral radius)
+          (realToFrac k)
+          (cBool findR)
+          (realToFrac r)
+          (cBool useMean)
       if r /= c'SUCCESS
         then error $ "Sauvola thresholding failed with " ++ (show r)
         else ptrToPixelImage True fimg
 
-integralThresholdFeng :: Int -> Double -> IntegralImage -> IO (PixelImage)
-integralThresholdFeng r k int = do
+integralThresholdFeng :: Bool -> Bool -> Double -> Int -> Double
+    -> IntegralImage -> IO (PixelImage)
+integralThresholdFeng invert estimateMin alpha radius multiplier int = do
   fimg <- allocPixelImage
   withForeignPtr (integralPtr int) $ \pint -> do
     withForeignPtr fimg $ \pimg -> do
-      r <- c'integral_image_threshold_feng pint pimg (fromIntegral r) (realToFrac k)
+      r <- c'integral_image_threshold_feng pint pimg 
+          (cBool invert)
+          (fromIntegral radius)
+          (realToFrac multiplier)
+          (cBool estimateMin)
+          (realToFrac alpha)
       if r /= c'SUCCESS
         then error $ "Feng thresholding failed with " ++ (show r)
         else ptrToPixelImage True fimg
