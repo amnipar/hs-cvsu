@@ -108,6 +108,9 @@ import Foreign.ForeignPtr
 #ccall quad_tree_divide_with_overlap , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> CDouble -> CDouble -> IO <result>
 
+#ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr CDouble -> Ptr CDouble -> IO <result>
+
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 
 #ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()

@@ -110,16 +110,18 @@ drawForest file forest = do
 
 treeEdge :: QuadForest -> Double -> QuadTree -> IO (Rectangle Int, Float)
 treeEdge f m t = do
-  nstat <- quadTreeNeighborhoodStat f m t
-  return (toRect t, double2Float $ (deviation $ quadTreeStat t) / (deviation nstat))
+  --nstat <- quadTreeNeighborhoodStat f m t
+  edge <- quadTreeEdgeResponse f t
+  return (toRect t, double2Float $ edge) -- abs $ (deviation $ quadTreeStat t) - (deviation nstat))
   where
     toRect (QuadTree _ x y s _ _ _ _ _ _) = mkRectangle (x,y) (s,s)
 
 drawEdges :: Image GrayScale D32 -> [(Rectangle Int, Float)] -> Image GrayScale D32
 drawEdges img es =
   img
-  <## [rectOp (e/maxE) (-1) r | (r,e) <- es]
+  <## [rectOp ((e - minE)/(maxE - minE)) (-1) r | (r,e) <- es]
   where
+    minE = minimum $ map snd es
     maxE = maximum $ map snd es
 
 main = do
@@ -132,7 +134,7 @@ main = do
     sf <- quadForestSegmentByOverlap alpha treeDiff regionDiff f
     --sf <- forestSegmentDeviation threshold minSize alpha f
     drawForest targetFile sf
-    es <- mapM (treeEdge sf 3) $ concatMap getTrees $ quadForestTrees sf
+    es <- mapM (treeEdge sf 2) $ quadForestTrees sf
     saveImage "edges.png" $ drawEdges img es
     saveImage "rects.png" $ drawRects img $ concatMap getTrees $ quadForestTrees sf
     saveImage "blocks.png" $ drawBlocks img sf

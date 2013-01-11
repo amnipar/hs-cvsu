@@ -13,6 +13,7 @@ module CVSU.QuadForest
 , quadTreeNeighborhoodStat
 , quadTreeDivide
 , quadTreeNeighbors
+, quadTreeEdgeResponse
 , quadTreeSegmentInit
 , quadTreeSegmentUnion
 , quadTreeSegmentFind
@@ -33,6 +34,8 @@ import CVSU.Types
 import CVSU.PixelImage
 import CVSU.List
 
+
+import Foreign.C.Types
 import Foreign.C.String
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
@@ -259,6 +262,25 @@ quadTreeNeighborhoodStat f m t =
          else do
            nstat <- peek pstat
            return $ hStatistics nstat
+
+quadTreeEdgeResponse :: QuadForest -> QuadTree -> IO Double
+quadTreeEdgeResponse f t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+        dx :: CDouble
+        dx = 0
+        dy :: CDouble
+        dy = 0
+    with dx $ \pdx ->
+      with dy $ \pdy -> do
+        r <- c'quad_tree_get_edge_response pforest (quadTreePtr t) pdx pdy
+        if r /= c'SUCCESS
+          then error $ "Get tree edge response failed with " ++ (show r)
+          else do
+            rdx <- peek pdx
+            rdy <- peek pdy
+            return $ sqrt $ (realToFrac rdx)**2 + (realToFrac rdy)**2
+
 
 -- | Divides the tree in four equal parts in quad-tree fashion. Causes side
 --   effects as the original tree will have four child trees after this
