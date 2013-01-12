@@ -50,6 +50,12 @@ toCVImage img = creatingImage $ toBareImage $ toIplImage img
     toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
     toBareImage = liftM castPtr
 
+toCVImageG :: PixelImage -> IO (Image GrayScale D8)
+toCVImageG img = creatingImage $ toBareImage $ toIplImage img
+  where
+    toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
+    toBareImage = liftM castPtr
+
 getTrees :: QuadTree -> [QuadTree]
 getTrees EmptyQuadTree = []
 getTrees t
@@ -134,7 +140,12 @@ main = do
     sf <- quadForestSegmentByOverlap alpha treeDiff regionDiff f
     --sf <- forestSegmentDeviation threshold minSize alpha f
     drawForest targetFile sf
-    es <- mapM (treeEdge sf 2) $ quadForestTrees sf
+    ss <- quadForestGetSegments sf
+    let
+      bySize (ForestSegment _ _ _ w h _ _) = w > 8 && w < 200 && h > 8 && h < 200
+    rimg <- quadForestGetSegmentMask sf False $ filter bySize ss
+    es <- mapM (treeEdge sf 2) $ concatMap getTrees $ quadForestTrees sf
+    saveImage "segments.png" =<< toCVImageG rimg
     saveImage "edges.png" $ drawEdges img es
     saveImage "rects.png" $ drawRects img $ concatMap getTrees $ quadForestTrees sf
     saveImage "blocks.png" $ drawBlocks img sf

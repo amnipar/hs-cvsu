@@ -21,6 +21,7 @@ module CVSU.QuadForest
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
 , quadForestGetSegments
+, quadForestGetSegmentMask
 , quadForestDrawImage
 , mapDeep
 ) where
@@ -56,7 +57,7 @@ import Debug.Trace
 
 data ForestSegment =
   ForestSegment
-  { segmentId :: Integer
+  { segmentPtr :: Ptr C'quad_forest_segment
   , segmentX :: Int
   , segmentY :: Int
   , segmentW :: Int
@@ -415,7 +416,7 @@ quadForestGetSegments f =
       readSegment pregion = do
         (C'quad_forest_segment p _ x1 y1 x2 y2 stat c1 c2 c3) <- peek pregion
         return $ ForestSegment
-          (fromIntegral $ ptrToWordPtr p)
+          p
           (fromIntegral x1)
           (fromIntegral y1)
           (fromIntegral $ x2-x1)
@@ -426,6 +427,24 @@ quadForestGetSegments f =
     c'quad_forest_get_segments pforest ptarget
     target <- (peekArray targetSize ptarget)
     mapM readSegment target
+
+-- | Creates a bitmask from a collection of segments. The result will be an
+--   image with the same dimensions as the minimum covering rectangle of the
+--   segment collection. By default those pixels that belong to the listed
+--   segments will be white (255) and the rest will be black (0). This behavior
+--   can be inverted by giving True as the value of the invert parameter.
+quadForestGetSegmentMask :: QuadForest -> Bool -> [ForestSegment] -> IO PixelImage
+quadForestGetSegmentMask forest invert ss = do
+  fimg <- allocPixelImage
+  withForeignPtr fimg $ \pimg ->
+    withForeignPtr (quadForestPtr forest) $ \pforest -> do
+      withArray (map segmentPtr ss) $ \psegments -> do
+        r <- c'quad_forest_get_segment_mask pforest pimg psegments
+            (fromIntegral $ length ss)
+            (cBool invert)
+        if r /= c'SUCCESS
+           then error $ "Getting segment mask failed with " ++ (show r)
+           else ptrToPixelImage True fimg
 
 -- | Draws an image of the forest using the current division and region info.
 --   Information from regions or individual trees will be used (based on

@@ -92,6 +92,9 @@ import Foreign.ForeignPtr
 #ccall quad_forest_get_segments , Ptr <quad_forest> \
   -> Ptr (Ptr <quad_forest_segment>) -> IO <result>
 
+#ccall quad_forest_get_segment_mask , Ptr <quad_forest> -> Ptr <pixel_image> \
+  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> <truth_value> -> IO <result>
+
 #ccall quad_forest_draw_image , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> <truth_value> -> <truth_value> -> IO <result>
 
