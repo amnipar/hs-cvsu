@@ -4,6 +4,10 @@ module CVSU.QuadForest
 ( QuadTree(..)
 , QuadForest(..)
 , ForestSegment(..)
+, segmentLeft
+, segmentTop
+, segmentRight
+, segmentBottom
 , quadForestCreate
 , quadForestUpdate
 , quadForestRefresh
@@ -65,6 +69,11 @@ data ForestSegment =
   , segmentStat :: Statistics
   , segmentColor :: (Float,Float,Float)
   }
+
+segmentLeft = segmentX
+segmentTop = segmentY
+segmentRight s = segmentX s + segmentW s
+segmentBottom s = segmentY s + segmentH s
 
 data QuadTree = EmptyQuadTree |
   QuadTree
