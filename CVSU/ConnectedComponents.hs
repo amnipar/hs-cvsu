@@ -85,4 +85,4 @@ drawConnectedComponents comp = do
       r <- c'connected_components_draw_image pcomp pimg
       if r /= c'SUCCESS
          then error "Drawing connected components image failes"
-         else ptrToPixelImage True fimg
+         else ptrToPixelImage fimg

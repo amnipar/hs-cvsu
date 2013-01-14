@@ -112,7 +112,7 @@ integralThresholdSauvola invert useMean findR r radius k int = do
           (cBool useMean)
       if r /= c'SUCCESS
         then error $ "Sauvola thresholding failed with " ++ (show r)
-        else ptrToPixelImage True fimg
+        else ptrToPixelImage fimg
 
 integralThresholdFeng :: Bool -> Bool -> Double -> Int -> Double
     -> IntegralImage -> IO (PixelImage)
@@ -128,4 +128,4 @@ integralThresholdFeng invert estimateMin alpha radius multiplier int = do
           (realToFrac alpha)
       if r /= c'SUCCESS
         then error $ "Feng thresholding failed with " ++ (show r)
-        else ptrToPixelImage True fimg
+        else ptrToPixelImage fimg

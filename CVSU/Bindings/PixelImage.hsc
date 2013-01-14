@@ -14,7 +14,6 @@ import Foreign.Ptr
 #field parent   , Ptr <pixel_image>
 #field data     , Ptr ()
 #field rows     , Ptr Word8
-#field own_data , CULong
 #field type     , <pixel_type>
 #field format   , <pixel_format>
 #field dx       , CULong

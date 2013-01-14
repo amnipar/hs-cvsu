@@ -453,7 +453,7 @@ quadForestGetSegmentMask forest invert ss = do
             (cBool invert)
         if r /= c'SUCCESS
            then error $ "Getting segment mask failed with " ++ (show r)
-           else ptrToPixelImage True fimg
+           else ptrToPixelImage fimg
 
 -- | Draws an image of the forest using the current division and region info.
 --   Information from regions or individual trees will be used (based on
@@ -471,7 +471,7 @@ quadForestDrawImage useRegions useColors forest = do
         (if useColors then 1 else 0)
       if r /= c'SUCCESS
          then error "Drawing forest image failed"
-         else ptrToPixelImage True fimg
+         else ptrToPixelImage fimg
 
 deep :: NFData a => a -> a
 deep a = deepseq a a

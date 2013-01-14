@@ -183,7 +183,7 @@ createPixelImage t f w h = do
       (fromIntegral $ formatToStride w f)
     if r /= c'SUCCESS
       then return NullImage
-      else ptrToPixelImage True fimg
+      else ptrToPixelImage fimg
 
 readPNMPixelImage :: String -> IO (PixelImage)
 readPNMPixelImage filename = do
@@ -193,7 +193,7 @@ readPNMPixelImage filename = do
       r <- c'pixel_image_read pimg pfilename
       if r /= c'SUCCESS
         then error $ "Failed to read image " ++ filename
-        else ptrToPixelImage True fimg
+        else ptrToPixelImage fimg
 
 writePNMPixelImage :: String -> Bool -> PixelImage -> IO ()
 writePNMPixelImage filename ascii img =
@@ -213,7 +213,7 @@ readPixelImage f = do
       r <- c'pixel_image_create_from_file pimg c_str c'p_U8 c'GREY
       if r /= c'SUCCESS
         then return NullImage
-        else ptrToPixelImage True fimg
+        else ptrToPixelImage fimg
 
 createPixelImageFromData :: PixelType -> PixelFormat -> Int -> Int -> Ptr () -> IO (PixelImage)
 createPixelImageFromData t f w h d = do
@@ -228,7 +228,7 @@ createPixelImageFromData t f w h d = do
       (fromIntegral $ formatToStride w f)
     if r /= c'SUCCESS
       then return NullImage
-      else ptrToPixelImage False fimg
+      else ptrToPixelImage fimg
 
 convertPixelImage :: PixelImage -> PixelImage -> IO (PixelImage)
 convertPixelImage src dst = do
@@ -248,8 +248,8 @@ withPixelImage pimg op =
     touchForeignPtr $ imagePtr pimg
     return r
 
-ptrToPixelImage :: Bool -> ForeignPtr C'pixel_image -> IO (PixelImage)
-ptrToPixelImage ownsData fptr =
+ptrToPixelImage :: ForeignPtr C'pixel_image -> IO (PixelImage)
+ptrToPixelImage fptr =
   withForeignPtr fptr $ \iptr ->
     if iptr == nullPtr
       then return NullImage
@@ -264,7 +264,6 @@ ptrToPixelImage ownsData fptr =
         c'pixel_image'dy = dy,
         c'pixel_image'stride = stride
         } <- peek iptr
-        setOwnership ownsData iptr
         return $ PixelImage fptr
           (hPixelType t)
           (hPixelFormat f)
@@ -274,10 +273,6 @@ ptrToPixelImage ownsData fptr =
           (fromIntegral dy)
           (fromIntegral stride)
           d
-  where
-    setOwnership owns ptr
-      | owns == True = poke (p'pixel_image'own_data ptr) 0
-      | otherwise    = return ()
 
 getPixel :: PixelImage -> (Int,Int) -> IO (Float)
 getPixel (PixelImage ptr t _ _ _ dx dy s d) (x,y) =

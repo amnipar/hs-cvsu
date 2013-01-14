@@ -20,7 +20,7 @@ fromIplImage ptr = do
     result <- c'pixel_image_create_from_ipl_image pimg (castPtr ptr) c'GREY
     if result /= c'SUCCESS
        then error $ "fromIplImage failed with " ++ (show result)
-       else ptrToPixelImage True fimg
+       else ptrToPixelImage fimg
 
 toIplImage :: PixelImage -> IO (Ptr (C'IplImage))
 toIplImage img = do
