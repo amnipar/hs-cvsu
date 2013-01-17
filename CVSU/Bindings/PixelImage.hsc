@@ -40,6 +40,11 @@ import Foreign.Ptr
 
 #ccall pixel_image_nullify , Ptr <pixel_image> -> IO (<result>)
 
+#ccall pixel_image_is_null , Ptr <pixel_image> -> IO <truth_value>
+
+#ccall pixel_image_create_roi , Ptr <pixel_image> -> Ptr <pixel_image> \
+  -> CULong -> CULong -> CULong -> CULong -> IO <result>
+
 #ccall pixel_image_convert , Ptr <pixel_image> -> Ptr <pixel_image> -> IO (<result>)
 
 #ccall pixel_image_clear , Ptr <pixel_image> -> IO (<result>)

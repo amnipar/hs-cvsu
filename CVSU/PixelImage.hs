@@ -11,6 +11,7 @@ module CVSU.PixelImage
 , writePNMPixelImage
 , readPixelImage
 , createPixelImageFromData
+, createPixelImageROI
 , convertPixelImage
 , withPixelImage
 , ptrToPixelImage
@@ -229,6 +230,20 @@ createPixelImageFromData t f w h d = do
     if r /= c'SUCCESS
       then return NullImage
       else ptrToPixelImage fimg
+
+createPixelImageROI :: PixelImage -> (Int,Int) -> (Int,Int) -> IO (PixelImage)
+createPixelImageROI src (dx,dy) (w,h) = do
+  fdst <- allocPixelImage
+  withForeignPtr fdst $ \pdst ->
+    withForeignPtr (imagePtr src) $ \psrc -> do
+      r <- c'pixel_image_create_roi pdst psrc
+          (fromIntegral dx)
+          (fromIntegral dy)
+          (fromIntegral w)
+          (fromIntegral h)
+      if r /= c'SUCCESS
+        then error $ "Creating pixel image roi failed with " ++ (show r)
+        else ptrToPixelImage fdst
 
 convertPixelImage :: PixelImage -> PixelImage -> IO (PixelImage)
 convertPixelImage src dst = do
