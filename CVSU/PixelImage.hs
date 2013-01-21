@@ -1,7 +1,11 @@
 module CVSU.PixelImage
 ( PixelImage(..)
 , PixelType(..)
+, cPixelType
+, hPixelType
 , PixelFormat(..)
+, cPixelFormat
+, hPixelFormat
 , valueConverter
 , formatToStep
 , formatToStride

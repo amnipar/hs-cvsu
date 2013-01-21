@@ -26,6 +26,7 @@ module CVSU.QuadForest
 , quadForestSegmentByOverlap
 , quadForestGetSegments
 , quadForestGetSegmentMask
+, quadForestHighlightSegments
 , quadForestDrawImage
 , mapDeep
 ) where
@@ -454,6 +455,22 @@ quadForestGetSegmentMask forest invert ss = do
         if r /= c'SUCCESS
            then error $ "Getting segment mask failed with " ++ (show r)
            else ptrToPixelImage fimg
+
+quadForestHighlightSegments :: QuadForest -> PixelImage -> (Float,Float,Float)
+    -> [ForestSegment] -> IO PixelImage
+quadForestHighlightSegments forest image (c1,c2,c3) ss =
+  withForeignPtr (quadForestPtr forest) $ \pforest ->
+    withForeignPtr (imagePtr image) $ \pimage ->
+      withArray (map segmentPtr ss) $ \psegments -> do
+        let
+          color :: [CUChar]
+          color = map (fromIntegral.round.(*255)) [c1,c2,c3,0]
+        withArray color $ \pcolor -> do
+          r <- c'quad_forest_highlight_segments pforest pimage psegments
+              (fromIntegral $ length ss) pcolor
+          if r /= c'SUCCESS
+            then error $ "Highlighting segments failed with " ++ (show r)
+            else ptrToPixelImage (imagePtr image)
 
 -- | Draws an image of the forest using the current division and region info.
 --   Information from regions or individual trees will be used (based on
