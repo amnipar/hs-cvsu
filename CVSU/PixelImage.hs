@@ -30,6 +30,7 @@ module CVSU.PixelImage
 import CVSU.Bindings.Types
 import CVSU.Bindings.PixelImage
 import CVSU.Bindings.OpenCV
+import CVSU.Types
 
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
@@ -204,11 +205,10 @@ writePNMPixelImage :: String -> Bool -> PixelImage -> IO ()
 writePNMPixelImage filename ascii img =
   withForeignPtr (imagePtr img) $ \pimg ->
     withCString filename $ \pfilename -> do
-      r <- c'pixel_image_write pimg pfilename (fromIntegral $ if ascii then 1 else 0)
+      r <- c'pixel_image_write pimg pfilename (cBool ascii)
       if r /= c'SUCCESS
         then error $ "Failed to write image " ++ filename
         else return ()
-
 
 readPixelImage :: String -> IO (PixelImage)
 readPixelImage f = do

@@ -1,5 +1,5 @@
 #include <bindings.dsl.h>
-#include "cvsu_basic.h"
+  #include "cvsu_pixel_image.h"
 
 module CVSU.Bindings.PixelImage where
 
@@ -51,7 +51,8 @@ import Foreign.Ptr
 
 #ccall pixel_image_read , Ptr <pixel_image> -> CString -> IO <result>
 
-#ccall pixel_image_write , Ptr <pixel_image> -> CString -> CULong -> IO <result>
+#ccall pixel_image_write , Ptr <pixel_image> -> CString -> <truth_value> \
+  -> IO <result>
 
 #ccall pixel_image_find_min_byte , Ptr <pixel_image> -> CLong -> CLong \
   -> CLong -> CLong -> CULong -> IO (CDouble)
