@@ -34,6 +34,14 @@ import Foreign.ForeignPtr
 #field level       , CULong
 #field stat        , <statistics>
 #field segment     , <quad_forest_segment>
+#field dx          , CDouble
+#field dy          , CDouble
+#field pool        , CDouble
+#field pool2       , CDouble
+#field acc         , CDouble
+#field acc2        , CDouble
+#field has_vedge   , <truth_value>
+#field has_hedge   , <truth_value>
 #field parent      , Ptr <quad_tree>
 #field nw          , Ptr <quad_tree>
 #field ne          , Ptr <quad_tree>
@@ -116,6 +124,8 @@ import Foreign.ForeignPtr
 
 #ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> Ptr CDouble -> Ptr CDouble -> IO <result>
+
+#ccall quad_forest_find_horizontal_edges , Ptr <quad_forest> -> IO <result>
 
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 

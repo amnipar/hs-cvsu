@@ -24,6 +24,7 @@ module CVSU.QuadForest
 , quadForestSegment
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
+, quadForestGetHorizontalEdges
 , quadForestGetSegments
 , quadForestGetSegmentMask
 , quadForestHighlightSegments
@@ -84,6 +85,10 @@ data QuadTree = EmptyQuadTree |
   , quadTreeSize :: Int
   , quadTreeLevel :: Int
   , quadTreeStat :: Statistics
+  , quadTreeDX :: Double
+  , quadTreeDY :: Double
+  , quadTreeVEdge :: Bool
+  , quadTreeHEdge :: Bool
   , quadTreeChildNW :: QuadTree
   , quadTreeChildNE :: QuadTree
   , quadTreeChildSW :: QuadTree
@@ -215,6 +220,10 @@ quadTreeFromPtr ptree
       c'quad_tree'size = s,
       c'quad_tree'level = l,
       c'quad_tree'stat = stat,
+      c'quad_tree'dx = dx,
+      c'quad_tree'dy = dy,
+      c'quad_tree'has_vedge = vedge,
+      c'quad_tree'has_hedge = hedge,
       c'quad_tree'nw = nw,
       c'quad_tree'ne = ne,
       c'quad_tree'sw = sw,
@@ -230,6 +239,10 @@ quadTreeFromPtr ptree
       (fromIntegral s)
       (fromIntegral l)
       (hStatistics stat)
+      (realToFrac dx)
+      (realToFrac dy)
+      (hBool vedge)
+      (hBool hedge)
       tnw tne tsw tse
 
 withQuadForest :: QuadForest -> (QuadForest -> IO a) -> IO a
@@ -403,15 +416,23 @@ quadForestSegmentByDeviation threshold alpha f =
        else quadForestRefresh f
 
 quadForestSegmentByOverlap :: Double -> Double -> Double -> QuadForest -> IO QuadForest
-quadForestSegmentByOverlap alpha treeOverlap segmentOverlap f =
-  withForeignPtr (quadForestPtr f) $ \pforest -> do
+quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_segment_with_overlap pforest
         (realToFrac alpha)
         (realToFrac treeOverlap)
         (realToFrac segmentOverlap)
     if r /= c'SUCCESS
-       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
-       else quadForestRefresh f
+      then error $ "quadForestSegmentEntropy failed with " ++ (show r)
+      else quadForestRefresh forest
+
+quadForestGetHorizontalEdges :: QuadForest -> IO QuadForest
+quadForestGetHorizontalEdges forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_find_horizontal_edges pforest
+    if r /= c'SUCCESS
+      then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
+      else quadForestRefresh forest
 
 quadForestGetSegments :: QuadForest -> IO [ForestSegment]
 quadForestGetSegments f =
