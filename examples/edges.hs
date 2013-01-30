@@ -26,6 +26,26 @@ fromCVImage img = do
   withGenImage img $ \pimg ->
     fromIplImage FormatGrey (castPtr pimg)
 
+drawEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
+drawEdges img ts =
+  rimg
+  <## [rectOp (toColor v) (-1) r | (r,v) <- map toRect ts]
+  <## [lineOp (0,1,1) 2 (x1,y1) (x2,y2) | ((x1,y1),(x2,y2)) <- map toLine $ filter quadTreeHasEdge ts]
+  where
+    rimg = grayToRGB img
+    toColor :: Float -> (Float,Float,Float)
+    toColor v = (v/maxV,v/maxV,v/maxV)
+    maxV = realToFrac $ maximum $ map (edgeMag.quadTreeEdge) ts
+    toRect (QuadTree _ x y s _ _ e _ _ _ _) =
+      (mkRectangle (x,y) (s,s), realToFrac $ edgeMag e)
+    toLine (QuadTree _ x y s _ _ e _ _ _ _) =
+      ((x+d-dx,y+d-dy),(x+d+dx,y+d+dy))
+      where
+        dx = round $ (edgeDY e / m) * fromIntegral d
+        dy = round $ (edgeDX e / m) * fromIntegral d
+        d = s `div` 2
+        m = max (edgeDX e) (edgeDY e)
+
 drawHEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
 drawHEdges img ts =
   rimg
@@ -38,31 +58,33 @@ drawHEdges img ts =
     maxV = realToFrac $ maximum $ map (edgeDY.quadTreeEdge) ts
     toRect (QuadTree _ x y s _ _ e _ _ _ _) =
       (mkRectangle (x,y) (s,s), realToFrac $ edgeDY e)
-    toHLine (QuadTree _ x y s _ _ _ _ _ _ _) = ((x,y+s`div`2),(x+s,y+s`div`2))
+    toHLine (QuadTree _ x y s _ _ e _ _ _ _) = ((x,y+s`div`2),(x+s,y+s`div`2))
 
-drawEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
-drawEdges img ts =
+drawVEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
+drawVEdges img ts =
   rimg
   <## [rectOp (toColor v) (-1) r | (r,v) <- map toRect ts]
-  <## [lineOp (0,1,1) 2 (x1,y1) (x2,y2) | ((x1,y1),(x2,y2)) <- map toHLine $ filter quadTreeHasEdge ts]
-  <## [lineOp (0,1,1) 2 (x1,y1) (x2,y2) | ((x1,y1),(x2,y2)) <- map toVLine $ filter quadTreeHasEdge ts]
+  <## [lineOp (0,1,1) 2 (x1,y1) (x2,y2) | ((x1,y1),(x2,y2)) <- map toVLine $ filter quadTreeHasVEdge ts]
   where
     rimg = grayToRGB img
     toColor :: Float -> (Float,Float,Float)
     toColor v = (v/maxV,v/maxV,v/maxV)
-    maxV = realToFrac $ maximum $ map (edgeMag.quadTreeEdge) ts
+    maxV = realToFrac $ maximum $ map (edgeDX.quadTreeEdge) ts
     toRect (QuadTree _ x y s _ _ e _ _ _ _) =
-      (mkRectangle (x,y) (s,s), realToFrac $ edgeMag e)
-    toHLine (QuadTree _ x y s _ _ _ _ _ _ _) = ((x,y+s`div`2),(x+s,y+s`div`2))
+      (mkRectangle (x,y) (s,s), realToFrac $ edgeDX e)
     toVLine (QuadTree _ x y s _ _ _ _ _ _ _) = ((x+s`div`2,y),(x+s`div`2,y+s))
 
 main = do
-  (sourceFile, targetFile, size, minSize) <- readArgs
+  (sourceFile, targetFile, mode, size, minSize) <- readArgs
+  (find,draw,bias) <- case mode of
+      "m" -> return (quadForestFindEdges, drawEdges,1.5)
+      "h" -> return (quadForestFindHorizontalEdges, drawHEdges,0.5)
+      "v" -> return (quadForestFindVerticalEdges, drawVEdges,0.5)
   img <- readFromFile sourceFile
   pimg <- fromCVImage $ unsafeImageTo8Bit img
   forest <- quadForestCreate pimg size minSize
   withQuadForest forest $ \f -> do
     --ef <- quadForestFindEdges 4 1 f
-    ef <- quadForestFindHorizontalEdges 4 0.5 f
+    ef <- find 4 bias f
     --saveImage targetFile $ drawEdges img $ quadForestTrees ef
-    saveImage targetFile $ drawHEdges img $ quadForestTrees ef
+    saveImage targetFile $ draw img $ quadForestTrees ef
