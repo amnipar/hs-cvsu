@@ -146,6 +146,9 @@ import Foreign.ForeignPtr
 #ccall quad_forest_find_vertical_edges , Ptr <quad_forest> -> CULong \
   -> CDouble -> IO <result>
 
+#ccall quad_forest_segment_horizontal_edges , Ptr <quad_forest> -> CULong \
+  -> CDouble -> <truth_value> -> <truth_value> -> IO <result>
+
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 
 #ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()

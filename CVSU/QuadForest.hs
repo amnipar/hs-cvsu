@@ -31,6 +31,7 @@ module CVSU.QuadForest
 , quadForestFindEdges
 , quadForestFindVerticalEdges
 , quadForestFindHorizontalEdges
+, quadForestSegmentHorizontalEdges
 , quadForestGetSegments
 , quadForestGetSegmentMask
 , quadForestHighlightSegments
@@ -452,7 +453,7 @@ quadForestFindEdges rounds bias forest =
         (fromIntegral rounds)
         (realToFrac bias)
     if r /= c'SUCCESS
-      then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
+      then error $ "quadForestFindEdges failed with " ++ (show r)
       else quadForestRefresh forest
 
 quadForestFindVerticalEdges :: Int -> Double -> QuadForest -> IO QuadForest
@@ -462,7 +463,7 @@ quadForestFindVerticalEdges rounds bias forest =
         (fromIntegral rounds)
         (realToFrac bias)
     if r /= c'SUCCESS
-      then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
+      then error $ "quadForestFindVerticalEdges failed with " ++ (show r)
       else quadForestRefresh forest
 
 quadForestFindHorizontalEdges :: Int -> Double -> QuadForest -> IO QuadForest
@@ -472,7 +473,20 @@ quadForestFindHorizontalEdges rounds bias forest =
         (fromIntegral rounds)
         (realToFrac bias)
     if r /= c'SUCCESS
-      then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
+      then error $ "quadForestFindHorizontalEdges failed with " ++ (show r)
+      else quadForestRefresh forest
+
+quadForestSegmentHorizontalEdges :: Int -> Double -> Bool -> Bool -> QuadForest 
+    -> IO QuadForest
+quadForestSegmentHorizontalEdges rounds bias propagateEdge useNeighbors forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_segment_horizontal_edges pforest
+        (fromIntegral rounds)
+        (realToFrac bias)
+        (cBool propagateEdge)
+        (cBool useNeighbors)
+    if r /= c'SUCCESS
+      then error $ "quadForestSegmentHorizontalEdges failed with " ++ (show r)
       else quadForestRefresh forest
 
 quadForestGetSegments :: QuadForest -> IO [ForestSegment]

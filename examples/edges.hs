@@ -26,6 +26,18 @@ fromCVImage img = do
   withGenImage img $ \pimg ->
     fromIplImage FormatGrey (castPtr pimg)
 
+toCVImage :: PixelImage -> IO (Image RGB D8)
+toCVImage img = creatingImage $ toBareImage $ toIplImage FormatRGB img
+  where
+    toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
+    toBareImage = liftM castPtr
+
+toCVImageG :: PixelImage -> IO (Image GrayScale D8)
+toCVImageG img = creatingImage $ toBareImage $ toIplImage FormatGrey img
+  where
+    toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
+    toBareImage = liftM castPtr
+
 drawEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
 drawEdges img ts =
   rimg
@@ -85,6 +97,13 @@ main = do
   forest <- quadForestCreate pimg size minSize
   withQuadForest forest $ \f -> do
     --ef <- quadForestFindEdges 4 1 f
-    ef <- find 4 bias f
+    --ef <- find 4 bias f
+    sf <- quadForestSegmentHorizontalEdges 4 0.5 True True f
+    segments <- quadForestGetSegments sf
+    let
+      bySize (ForestSegment _ _ _ w h _ _) = w > 8 && w < 380 && h > 8 && h < 170
+    --rimg <- quadForestGetSegmentMask sf False $ filter bySize segments
+    print $ length $ filter bySize segments
+    saveImage "segmented.png" =<< toCVImage =<< quadForestDrawImage True True forest -- =<< toCVImageG rimg -- 
     --saveImage targetFile $ drawEdges img $ quadForestTrees ef
-    saveImage targetFile $ draw img $ quadForestTrees ef
+    saveImage targetFile $ draw img $ quadForestTrees sf
