@@ -4,6 +4,7 @@ module CVSU.QuadForest
 ( QuadTree(..)
 , QuadForest(..)
 , ForestSegment(..)
+, ForestEdge(..)
 , segmentLeft
 , segmentTop
 , segmentRight
@@ -13,6 +14,9 @@ module CVSU.QuadForest
 , quadForestRefresh
 , withQuadForest
 , quadForestGetTree
+, quadTreeHasEdge
+, quadTreeHasVEdge
+, quadTreeHasHEdge
 , quadTreeChildStat
 , quadTreeNeighborhoodStat
 , quadTreeDivide
@@ -24,7 +28,9 @@ module CVSU.QuadForest
 , quadForestSegment
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
-, quadForestGetHorizontalEdges
+, quadForestFindEdges
+, quadForestFindVerticalEdges
+, quadForestFindHorizontalEdges
 , quadForestGetSegments
 , quadForestGetSegmentMask
 , quadForestHighlightSegments
@@ -70,12 +76,24 @@ data ForestSegment =
   , segmentH :: Int
   , segmentStat :: Statistics
   , segmentColor :: (Float,Float,Float)
-  }
+  } deriving Eq
 
 segmentLeft = segmentX
 segmentTop = segmentY
 segmentRight s = segmentX s + segmentW s
 segmentBottom s = segmentY s + segmentH s
+
+data ForestEdge =
+  ForestEdge
+  { edgePtr :: Ptr C'quad_forest_edge
+  , edgeDX :: Double
+  , edgeDY :: Double
+  , edgeMag :: Double
+  , edgeAng :: Double
+  , edgeM :: Bool
+  , edgeV :: Bool
+  , edgeH :: Bool
+  } deriving Eq
 
 data QuadTree = EmptyQuadTree |
   QuadTree
@@ -85,22 +103,16 @@ data QuadTree = EmptyQuadTree |
   , quadTreeSize :: Int
   , quadTreeLevel :: Int
   , quadTreeStat :: Statistics
-  , quadTreeDX :: Double
-  , quadTreeDY :: Double
-  , quadTreeVEdge :: Bool
-  , quadTreeHEdge :: Bool
+  , quadTreeEdge :: ForestEdge
   , quadTreeChildNW :: QuadTree
   , quadTreeChildNE :: QuadTree
   , quadTreeChildSW :: QuadTree
   , quadTreeChildSE :: QuadTree
   } deriving Eq
 
-{-
-instance Show ImageTree where
-  show EmptyTree = "(T)"
-  show (ImageTree _ x y s l stat _ _ _ _) =
-    "(T " ++ show x ++ " " ++ show y ++ " " ++ show s ++ " " ++ show l ++ " " ++ show stat ++ ")"
--}
+quadTreeHasEdge  = edgeM . quadTreeEdge
+quadTreeHasVEdge = edgeV . quadTreeEdge
+quadTreeHasHEdge = edgeH . quadTreeEdge
 
 data QuadForest =
   QuadForest
@@ -115,12 +127,6 @@ data QuadForest =
   , quadForestDY :: Int
   , quadForestTrees :: ![QuadTree]
   }
-
-{-
-instance (Show a) => Show (QuadForest a) where
-  show (ImageForest p _ r c _ _ ts) = "(F " ++
-    (show r) ++ "x" ++ (show c) ++ " " ++ (show ts) ++ ")"
--}
 
 -- allocate image_tree_forest structure using c function and foreign pointers
 -- image_tree_forest_alloc is used for allocating the image struct
@@ -210,6 +216,25 @@ quadForestRefresh f =
       (fromIntegral dy)
       ts
 
+hForestEdge
+  C'quad_forest_edge{
+      c'quad_forest_edge'parent = parent,
+      c'quad_forest_edge'dx = dx,
+      c'quad_forest_edge'dy = dy,
+      c'quad_forest_edge'mag = mag,
+      c'quad_forest_edge'ang = ang,
+      c'quad_forest_edge'has_edge = has_edge,
+      c'quad_forest_edge'has_vedge = has_vedge,
+      c'quad_forest_edge'has_hedge = has_hedge
+    } = ForestEdge parent
+      (realToFrac dx)
+      (realToFrac dy)
+      (realToFrac mag)
+      (realToFrac ang)
+      (hBool has_edge)
+      (hBool has_vedge)
+      (hBool has_hedge)
+
 quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
 quadTreeFromPtr ptree
   | ptree == nullPtr = return EmptyQuadTree
@@ -220,10 +245,7 @@ quadTreeFromPtr ptree
       c'quad_tree'size = s,
       c'quad_tree'level = l,
       c'quad_tree'stat = stat,
-      c'quad_tree'dx = dx,
-      c'quad_tree'dy = dy,
-      c'quad_tree'has_vedge = vedge,
-      c'quad_tree'has_hedge = hedge,
+      c'quad_tree'edge = edge,
       c'quad_tree'nw = nw,
       c'quad_tree'ne = ne,
       c'quad_tree'sw = sw,
@@ -239,10 +261,7 @@ quadTreeFromPtr ptree
       (fromIntegral s)
       (fromIntegral l)
       (hStatistics stat)
-      (realToFrac dx)
-      (realToFrac dy)
-      (hBool vedge)
-      (hBool hedge)
+      (hForestEdge edge)
       tnw tne tsw tse
 
 withQuadForest :: QuadForest -> (QuadForest -> IO a) -> IO a
@@ -426,10 +445,32 @@ quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
       else quadForestRefresh forest
 
-quadForestGetHorizontalEdges :: QuadForest -> IO QuadForest
-quadForestGetHorizontalEdges forest =
+quadForestFindEdges :: Int -> Double -> QuadForest -> IO QuadForest
+quadForestFindEdges rounds bias forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_find_edges pforest
+        (fromIntegral rounds)
+        (realToFrac bias)
+    if r /= c'SUCCESS
+      then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
+      else quadForestRefresh forest
+
+quadForestFindVerticalEdges :: Int -> Double -> QuadForest -> IO QuadForest
+quadForestFindVerticalEdges rounds bias forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_find_vertical_edges pforest
+        (fromIntegral rounds)
+        (realToFrac bias)
+    if r /= c'SUCCESS
+      then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
+      else quadForestRefresh forest
+
+quadForestFindHorizontalEdges :: Int -> Double -> QuadForest -> IO QuadForest
+quadForestFindHorizontalEdges rounds bias forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_find_horizontal_edges pforest
+        (fromIntegral rounds)
+        (realToFrac bias)
     if r /= c'SUCCESS
       then error $ "quadForestGetHorizontalEdges failed with " ++ (show r)
       else quadForestRefresh forest

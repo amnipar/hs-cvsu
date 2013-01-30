@@ -14,6 +14,8 @@ import Foreign.C.String
 import Foreign.Ptr
 import Foreign.ForeignPtr
 
+#integral_t quad_forest_status
+
 #starttype quad_forest_segment
 #field parent   , Ptr <quad_forest_segment>
 #field rank     , CULong
@@ -27,6 +29,18 @@ import Foreign.ForeignPtr
 #field color[2] , Word8
 #stoptype
 
+#starttype quad_forest_edge
+#field parent    , Ptr <quad_forest_edge>
+#field rank      , CULong
+#field dx        , CDouble
+#field dy        , CDouble
+#field mag       , CDouble
+#field ang       , CDouble
+#field has_edge  , <truth_value>
+#field has_vedge , <truth_value>
+#field has_hedge , <truth_value>
+#stoptype
+
 #starttype quad_tree
 #field x           , CULong
 #field y           , CULong
@@ -34,14 +48,7 @@ import Foreign.ForeignPtr
 #field level       , CULong
 #field stat        , <statistics>
 #field segment     , <quad_forest_segment>
-#field dx          , CDouble
-#field dy          , CDouble
-#field pool        , CDouble
-#field pool2       , CDouble
-#field acc         , CDouble
-#field acc2        , CDouble
-#field has_vedge   , <truth_value>
-#field has_hedge   , <truth_value>
+#field edge        , <quad_forest_edge>
 #field parent      , Ptr <quad_tree>
 #field nw          , Ptr <quad_tree>
 #field ne          , Ptr <quad_tree>
@@ -51,9 +58,14 @@ import Foreign.ForeignPtr
 #field e           , Ptr <quad_tree>
 #field s           , Ptr <quad_tree>
 #field w           , Ptr <quad_tree>
+#field pool        , CDouble
+#field pool2       , CDouble
+#field acc         , CDouble
+#field acc2        , CDouble
 #stoptype
 
 #starttype quad_forest
+#field status          , <quad_forest_status>
 #field original        , Ptr <pixel_image>
 #field source          , Ptr <pixel_image>
 #field integral        , <integral_image>
@@ -125,7 +137,14 @@ import Foreign.ForeignPtr
 #ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> Ptr CDouble -> Ptr CDouble -> IO <result>
 
-#ccall quad_forest_find_horizontal_edges , Ptr <quad_forest> -> IO <result>
+#ccall quad_forest_find_edges , Ptr <quad_forest> -> CULong -> CDouble \
+  -> IO <result>
+
+#ccall quad_forest_find_horizontal_edges , Ptr <quad_forest> -> CULong \
+  -> CDouble -> IO <result>
+
+#ccall quad_forest_find_vertical_edges , Ptr <quad_forest> -> CULong \
+  -> CDouble -> IO <result>
 
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 
