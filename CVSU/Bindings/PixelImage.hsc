@@ -1,5 +1,5 @@
 #include <bindings.dsl.h>
-  #include "cvsu_pixel_image.h"
+#include "cvsu_pixel_image.h"
 
 module CVSU.Bindings.PixelImage where
 

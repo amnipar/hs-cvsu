@@ -82,30 +82,6 @@ import Foreign.Ptr
 #field N      , CULong
 #stoptype
 
--- block type and enum values
-
-#integral_t image_block_type
-
-#num b_NONE
-#num b_INT
-#num b_REAL
-#num b_STAT_GREY
-#num b_STAT_COLOR
-#num b_STAT_WITH_DIR
-#num b_HSTAT_GREY
-#num b_HSTAT_COLOR
-#num b_STATISTICS
-
--- image block type
-
-#starttype image_block
-#field x     , CUShort
-#field y     , CUShort
-#field w     , CUShort
-#field h     , CUShort
-#field value , Ptr ()
-#stoptype
-
 -- point type
 
 #starttype point
@@ -145,59 +121,4 @@ import Foreign.Ptr
 #field mean , CDouble
 #field variance , CDouble
 #field deviation , CDouble
-#stoptype
-
--- stat grey type
-
-#starttype stat_grey
-#field mean , CShort
-#field dev  , CShort
-#stoptype
-
--- stat color type
-
-#starttype stat_color
-#field mean_i , CShort
-#field dev_i  , CShort
-#field mean_c1 , CShort
-#field dev_c1  , CShort
-#field mean_c2 , CShort
-#field dev_c2  , CShort
-#stoptype
-
-#starttype stat_with_dir
-#field mean   , CShort
-#field dev    , CShort
-#field dir_h  , CShort
-#field dir_v  , CShort
-#stoptype
-
-#starttype hstat_grey
-#field mean    , CShort
-#field dev     , CShort
-#field mean_nw , CShort
-#field mean_ne , CShort
-#field mean_se , CShort
-#field mean_sw , CShort
-#stoptype
-
-#starttype hstat_color
-#field mean_i     , CShort
-#field dev_i      , CShort
-#field mean_c1    , CShort
-#field dev_c1     , CShort
-#field mean_c2    , CShort
-#field dev_c2     , CShort
-#field mean_i_nw  , CShort
-#field mean_c1_nw , CShort
-#field mean_c2_nw , CShort
-#field mean_i_ne  , CShort
-#field mean_c1_ne , CShort
-#field mean_c2_ne , CShort
-#field mean_i_se  , CShort
-#field mean_c1_se , CShort
-#field mean_c2_se , CShort
-#field mean_i_sw  , CShort
-#field mean_c1_sw , CShort
-#field mean_c2_sw , CShort
 #stoptype

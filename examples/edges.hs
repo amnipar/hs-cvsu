@@ -4,9 +4,10 @@ module Main where
 import CVSU.Types
 import CVSU.PixelImage
 import CVSU.QuadForest
-import CVSU.OpenCV
+--import CVSU.OpenCV
 
 import CV.Image
+import CV.CVSU
 import CV.Filters
 import CV.Matrix as M
 import CV.Drawing
@@ -20,6 +21,7 @@ import System.IO.Unsafe
 import GHC.Float
 import Foreign.Ptr
 
+{-
 fromCVImage :: Image GrayScale D8 -> IO (PixelImage)
 fromCVImage img = do
   saveImage "temp.png" img
@@ -37,7 +39,7 @@ toCVImageG img = creatingImage $ toBareImage $ toIplImage FormatGrey img
   where
     toBareImage :: IO (Ptr C'IplImage) -> IO (Ptr BareImage)
     toBareImage = liftM castPtr
-
+    -}
 drawEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
 drawEdges img ts =
   rimg
@@ -93,7 +95,7 @@ main = do
       "h" -> return (quadForestFindHorizontalEdges, drawHEdges,0.5)
       "v" -> return (quadForestFindVerticalEdges, drawVEdges,0.5)
   img <- readFromFile sourceFile
-  pimg <- fromCVImage $ unsafeImageTo8Bit img
+  pimg <- toPixelImage $ unsafeImageTo8Bit img
   forest <- quadForestCreate pimg size minSize
   withQuadForest forest $ \f -> do
     --ef <- quadForestFindEdges 4 1 f
@@ -104,6 +106,7 @@ main = do
       bySize (ForestSegment _ _ _ w h _ _) = w > 8 && w < 380 && h > 8 && h < 170
     --rimg <- quadForestGetSegmentMask sf False $ filter bySize segments
     print $ length $ filter bySize segments
-    saveImage "segmented.png" =<< toCVImage =<< quadForestDrawImage True True forest -- =<< toCVImageG rimg -- 
+    (simg :: Image RGB D8) <- fromPixelImage =<< quadForestDrawImage True True forest -- =<<
+    saveImage "segmented.png" simg -- =<<  toCVImageG rimg -- 
     --saveImage targetFile $ drawEdges img $ quadForestTrees ef
     saveImage targetFile $ draw img $ quadForestTrees sf

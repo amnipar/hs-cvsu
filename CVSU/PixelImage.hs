@@ -1,5 +1,6 @@
 module CVSU.PixelImage
 ( PixelImage(..)
+, Convertible(..)
 , PixelType(..)
 , cPixelType
 , hPixelType
@@ -11,9 +12,8 @@ module CVSU.PixelImage
 , formatToStride
 , allocPixelImage
 , createPixelImage
-, readPNMPixelImage
-, writePNMPixelImage
 , readPixelImage
+, writePixelImage
 , createPixelImageFromData
 , createPixelImageROI
 , convertPixelImage
@@ -29,7 +29,6 @@ module CVSU.PixelImage
 
 import CVSU.Bindings.Types
 import CVSU.Bindings.PixelImage
-import CVSU.Bindings.OpenCV
 import CVSU.Types
 
 import Foreign.Ptr
@@ -169,6 +168,10 @@ data PixelImage =
   , d :: Ptr()
   } deriving Eq
 
+class Convertible c where
+  fromPixelImage :: PixelImage -> IO c
+  toPixelImage :: c -> IO PixelImage
+
 allocPixelImage :: IO (ForeignPtr C'pixel_image)
 allocPixelImage = do
   ptr <- c'pixel_image_alloc
@@ -191,8 +194,10 @@ createPixelImage t f w h = do
       then return NullImage
       else ptrToPixelImage fimg
 
-readPNMPixelImage :: String -> IO (PixelImage)
-readPNMPixelImage filename = do
+-- | Reads pixel image from a file. Only pnm/ppm/pgm/pbm format is supported.
+--   For other file formats, check CV.CVSU module in cv-cvsu library.
+readPixelImage :: String -> IO (PixelImage)
+readPixelImage filename = do
   fimg <- allocPixelImage
   withForeignPtr fimg $ \pimg ->
     withCString filename $ \pfilename -> do
@@ -201,24 +206,17 @@ readPNMPixelImage filename = do
         then error $ "Failed to read image " ++ filename
         else ptrToPixelImage fimg
 
-writePNMPixelImage :: String -> Bool -> PixelImage -> IO ()
-writePNMPixelImage filename ascii img =
+-- | Writes pixel image to a file. Depending on format, ppm/pgm/pbm image will
+--   be created. For other file formats, check CV.CVSU module in cv-cvsu 
+--   library.
+writePixelImage :: String -> Bool -> PixelImage -> IO ()
+writePixelImage filename ascii img =
   withForeignPtr (imagePtr img) $ \pimg ->
     withCString filename $ \pfilename -> do
       r <- c'pixel_image_write pimg pfilename (cBool ascii)
       if r /= c'SUCCESS
         then error $ "Failed to write image " ++ filename
         else return ()
-
-readPixelImage :: String -> IO (PixelImage)
-readPixelImage f = do
-  fimg <- allocPixelImage
-  withForeignPtr fimg $ \pimg ->
-    withCString f $ \c_str -> do
-      r <- c'pixel_image_create_from_file pimg c_str c'p_U8 c'GREY
-      if r /= c'SUCCESS
-        then return NullImage
-        else ptrToPixelImage fimg
 
 createPixelImageFromData :: PixelType -> PixelFormat -> Int -> Int -> Ptr () -> IO (PixelImage)
 createPixelImageFromData t f w h d = do

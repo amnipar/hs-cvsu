@@ -19,13 +19,13 @@ Cabal-version:       >=1.8
 Library
   Exposed-modules:
     CVSU.Types
+    CVSU.C.Types
     CVSU.List
     CVSU.PixelImage
     CVSU.ConnectedComponents
     CVSU.Integral
     CVSU.Edges
     CVSU.QuadForest
-    CVSU.OpenCV
   Other-Modules:
     CVSU.Bindings.Types
     CVSU.Bindings.List
@@ -34,32 +34,19 @@ Library
     CVSU.Bindings.Integral
     CVSU.Bindings.Edges
     CVSU.Bindings.QuadForest
-    CVSU.Bindings.OpenCV
   Extensions:
     ForeignFunctionInterface
   Build-Depends:
     base >= 3 && < 5,
     bindings-DSL >= 1.0.7 && < 1.1,
     parallel >= 3.2.0.0,
-    deepseq >= 1.1.0.2,
-    CV >= 0.3.6.2
+    deepseq >= 1.1.0.2
   Include-dirs:
     c
-    /usr/include/opencv
   cc-options:
     --std=c99
   Extra-libraries:
-    m,
-    opencv_calib3d,
-    opencv_contrib,
-    opencv_core,
-    opencv_features2d,
-    opencv_highgui,
-    opencv_imgproc,
-    opencv_legacy,
-    opencv_ml,
-    opencv_objdetect,
-    opencv_video
+    m
   Includes:
     c/cvsu_config.h,
     c/cvsu_macros.h,
@@ -72,8 +59,7 @@ Library
     c/cvsu_filter.h,
     c/cvsu_integral.h,
     c/cvsu_edges.h,
-    c/cvsu_quad_forest.h,
-    c/cvsu_opencv.h
+    c/cvsu_quad_forest.h
   Install-includes:
     c/cvsu_config.h,
     c/cvsu_macros.h,
@@ -86,8 +72,7 @@ Library
     c/cvsu_filter.h,
     c/cvsu_integral.h,
     c/cvsu_edges.h,
-    c/cvsu_quad_forest.h,
-    c/cvsu_opencv.h
+    c/cvsu_quad_forest.h
   C-sources:
     c/cvsu_memory.c,
     c/cvsu_output.c,
@@ -98,8 +83,7 @@ Library
     c/cvsu_filter.c,
     c/cvsu_integral.c,
     c/cvsu_edges.c,
-    c/cvsu_quad_forest.c,
-    c/cvsu_opencv.c
+    c/cvsu_quad_forest.c
 
 source-repository head
   type:     git

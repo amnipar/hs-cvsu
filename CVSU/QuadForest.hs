@@ -42,12 +42,10 @@ module CVSU.QuadForest
 import CVSU.Bindings.Types
 import CVSU.Bindings.PixelImage
 import CVSU.Bindings.List
-import CVSU.Bindings.OpenCV
 import CVSU.Bindings.QuadForest
 import CVSU.Types
 import CVSU.PixelImage
 import CVSU.List
-
 
 import Foreign.C.Types
 import Foreign.C.String
@@ -64,7 +62,7 @@ import Control.Monad
 import Control.Exception hiding (block)
 import Control.Parallel.Strategies
 import Control.DeepSeq
-import CV.Image
+-- import CV.Image
 import GHC.Float
 import Debug.Trace
 
