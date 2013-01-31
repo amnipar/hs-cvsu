@@ -8,6 +8,7 @@ module CVSU.Bindings.List where
 import CVSU.Bindings.Types
 
 import Foreign.Ptr
+import Foreign.C.Types
 
 #starttype list_item
 #field prev , Ptr <list_item>
@@ -16,10 +17,13 @@ import Foreign.Ptr
 #stoptype
 
 #starttype chunk
-#field item_size , CULong
-#field size      , CULong
-#field count     , CULong
-#field chunk     , Ptr Word8
+#field item_size     , CULong
+#field size          , CULong
+#field count         , CULong
+#field chunk_count   , CULong
+#field current_chunk , CULong
+#field chunks        , Ptr (Ptr CUChar)
+#field chunk         , Ptr CUChar
 #stoptype
 
 #starttype list
