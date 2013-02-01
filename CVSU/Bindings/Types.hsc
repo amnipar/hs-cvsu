@@ -22,6 +22,12 @@ import Foreign.Ptr
 #num d_SW
 #num d_W
 #num d_NW
+#num d_H
+#num d_V
+#num d_R
+#num d_F
+#num d_N4
+#num d_N8
 
 -- result type and enum values
 

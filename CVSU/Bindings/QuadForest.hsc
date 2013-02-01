@@ -36,9 +36,10 @@ import Foreign.ForeignPtr
 #field dy        , CDouble
 #field mag       , CDouble
 #field ang       , CDouble
+#field mean      , CDouble
+#field deviation , CDouble
 #field has_edge  , <truth_value>
-#field has_vedge , <truth_value>
-#field has_hedge , <truth_value>
+#field dir       , <direction>
 #stoptype
 
 #starttype quad_tree
@@ -138,16 +139,11 @@ import Foreign.ForeignPtr
   -> Ptr CDouble -> Ptr CDouble -> IO <result>
 
 #ccall quad_forest_find_edges , Ptr <quad_forest> -> CULong -> CDouble \
-  -> IO <result>
-
-#ccall quad_forest_find_horizontal_edges , Ptr <quad_forest> -> CULong \
-  -> CDouble -> IO <result>
-
-#ccall quad_forest_find_vertical_edges , Ptr <quad_forest> -> CULong \
-  -> CDouble -> IO <result>
+  -> <direction> -> IO <result>
 
 #ccall quad_forest_segment_horizontal_edges , Ptr <quad_forest> -> CULong \
-  -> CDouble -> <truth_value> -> <truth_value> -> IO <result>
+  -> CDouble -> <direction> -> CULong -> CDouble -> <direction> -> <direction> \
+  -> IO <result>
 
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 

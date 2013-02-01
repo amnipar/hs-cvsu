@@ -29,9 +29,7 @@ module CVSU.QuadForest
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
 , quadForestFindEdges
-, quadForestFindVerticalEdges
-, quadForestFindHorizontalEdges
-, quadForestSegmentHorizontalEdges
+, quadForestSegmentEdges
 , quadForestGetSegments
 , quadForestGetSegmentMask
 , quadForestHighlightSegments
@@ -89,9 +87,10 @@ data ForestEdge =
   , edgeDY :: Double
   , edgeMag :: Double
   , edgeAng :: Double
-  , edgeM :: Bool
-  , edgeV :: Bool
-  , edgeH :: Bool
+  , edgeMean :: Double
+  , edgeDev :: Double
+  , edgeFound :: Bool
+  , edgeDir :: Direction
   } deriving Eq
 
 data QuadTree = EmptyQuadTree |
@@ -109,9 +108,11 @@ data QuadTree = EmptyQuadTree |
   , quadTreeChildSE :: QuadTree
   } deriving Eq
 
-quadTreeHasEdge  = edgeM . quadTreeEdge
-quadTreeHasVEdge = edgeV . quadTreeEdge
-quadTreeHasHEdge = edgeH . quadTreeEdge
+quadTreeHasEdge  = edgeFound . quadTreeEdge
+quadTreeHasVEdge t =
+  (quadTreeHasEdge t) && ((==DirV) $ edgeDir $ quadTreeEdge t)
+quadTreeHasHEdge t =
+  (quadTreeHasEdge t) && ((==DirH) $ edgeDir $ quadTreeEdge t)
 
 data QuadForest =
   QuadForest
@@ -222,17 +223,19 @@ hForestEdge
       c'quad_forest_edge'dy = dy,
       c'quad_forest_edge'mag = mag,
       c'quad_forest_edge'ang = ang,
+      c'quad_forest_edge'mean = mean,
+      c'quad_forest_edge'deviation = dev,
       c'quad_forest_edge'has_edge = has_edge,
-      c'quad_forest_edge'has_vedge = has_vedge,
-      c'quad_forest_edge'has_hedge = has_hedge
+      c'quad_forest_edge'dir = dir
     } = ForestEdge parent
       (realToFrac dx)
       (realToFrac dy)
       (realToFrac mag)
       (realToFrac ang)
+      (realToFrac mean)
+      (realToFrac dev)
       (hBool has_edge)
-      (hBool has_vedge)
-      (hBool has_hedge)
+      (hDirection dir)
 
 quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
 quadTreeFromPtr ptree
@@ -444,47 +447,32 @@ quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
       else quadForestRefresh forest
 
-quadForestFindEdges :: Int -> Double -> QuadForest -> IO QuadForest
-quadForestFindEdges rounds bias forest =
+quadForestFindEdges :: Int -> Double -> Direction -> QuadForest -> IO QuadForest
+quadForestFindEdges rounds bias dir forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_find_edges pforest
         (fromIntegral rounds)
         (realToFrac bias)
+        (cDirection dir)
     if r /= c'SUCCESS
       then error $ "quadForestFindEdges failed with " ++ (show r)
       else quadForestRefresh forest
 
-quadForestFindVerticalEdges :: Int -> Double -> QuadForest -> IO QuadForest
-quadForestFindVerticalEdges rounds bias forest =
-  withForeignPtr (quadForestPtr forest) $ \pforest -> do
-    r <- c'quad_forest_find_vertical_edges pforest
-        (fromIntegral rounds)
-        (realToFrac bias)
-    if r /= c'SUCCESS
-      then error $ "quadForestFindVerticalEdges failed with " ++ (show r)
-      else quadForestRefresh forest
-
-quadForestFindHorizontalEdges :: Int -> Double -> QuadForest -> IO QuadForest
-quadForestFindHorizontalEdges rounds bias forest =
-  withForeignPtr (quadForestPtr forest) $ \pforest -> do
-    r <- c'quad_forest_find_horizontal_edges pforest
-        (fromIntegral rounds)
-        (realToFrac bias)
-    if r /= c'SUCCESS
-      then error $ "quadForestFindHorizontalEdges failed with " ++ (show r)
-      else quadForestRefresh forest
-
-quadForestSegmentHorizontalEdges :: Int -> Double -> Bool -> Bool -> QuadForest 
-    -> IO QuadForest
-quadForestSegmentHorizontalEdges rounds bias propagateEdge useNeighbors forest =
+quadForestSegmentEdges :: Int -> Double -> Direction -> Int -> Double
+      -> Direction -> Direction -> QuadForest -> IO QuadForest
+quadForestSegmentEdges detectRounds detectBias detectDir propRounds
+      propThreshold propDir mergeDir forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_segment_horizontal_edges pforest
-        (fromIntegral rounds)
-        (realToFrac bias)
-        (cBool propagateEdge)
-        (cBool useNeighbors)
+        (fromIntegral detectRounds)
+        (realToFrac detectBias)
+        (cDirection detectDir)
+        (fromIntegral propRounds)
+        (realToFrac propThreshold)
+        (cDirection propDir)
+        (cDirection mergeDir)
     if r /= c'SUCCESS
-      then error $ "quadForestSegmentHorizontalEdges failed with " ++ (show r)
+      then error $ "quadForestSegmentEdges failed with " ++ (show r)
       else quadForestRefresh forest
 
 quadForestGetSegments :: QuadForest -> IO [ForestSegment]

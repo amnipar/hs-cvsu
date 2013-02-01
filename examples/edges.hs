@@ -53,12 +53,12 @@ drawEdges img ts =
     toRect (QuadTree _ x y s _ _ e _ _ _ _) =
       (mkRectangle (x,y) (s,s), realToFrac $ edgeMag e)
     toLine (QuadTree _ x y s _ _ e _ _ _ _) =
-      ((x+d-dx,y+d-dy),(x+d+dx,y+d+dy))
+      ((x+d+dx,y+d-dy),(x+d-dx,y+d+dy))
       where
         dx = round $ (edgeDY e / m) * fromIntegral d
         dy = round $ (edgeDX e / m) * fromIntegral d
         d = s `div` 2
-        m = max (edgeDX e) (edgeDY e)
+        m = max (abs $ edgeDX e) (abs $ edgeDY e)
 
 drawHEdges :: Image GrayScale D32 -> [QuadTree] -> Image RGB D32
 drawHEdges img ts =
@@ -91,7 +91,7 @@ drawVEdges img ts =
 main = do
   (sourceFile, targetFile, mode, size, minSize) <- readArgs
   (find,draw,bias) <- case mode of
-      "m" -> return (quadForestFindEdges, drawEdges,1.5)
+      "m" -> return (quadForestFindEdges, drawEdges,1)
       "h" -> return (quadForestFindHorizontalEdges, drawHEdges,0.5)
       "v" -> return (quadForestFindVerticalEdges, drawVEdges,0.5)
   img <- readFromFile sourceFile
@@ -100,13 +100,13 @@ main = do
   withQuadForest forest $ \f -> do
     --ef <- quadForestFindEdges 4 1 f
     --ef <- find 4 bias f
-    sf <- quadForestSegmentHorizontalEdges 4 0.5 True True f
+    sf <- quadForestSegmentHorizontalEdges 4 bias True True f
     segments <- quadForestGetSegments sf
     let
       bySize (ForestSegment _ _ _ w h _ _) = w > 8 && w < 380 && h > 8 && h < 170
     --rimg <- quadForestGetSegmentMask sf False $ filter bySize segments
     print $ length $ filter bySize segments
     (simg :: Image RGB D8) <- fromPixelImage =<< quadForestDrawImage True True forest -- =<<
-    saveImage "segmented.png" simg -- =<<  toCVImageG rimg -- 
+    saveImage "segmented.png" simg -- =<<  toCVImageG rimg --
     --saveImage targetFile $ drawEdges img $ quadForestTrees ef
     saveImage targetFile $ draw img $ quadForestTrees sf
