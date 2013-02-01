@@ -89,8 +89,8 @@ import Foreign.ForeignPtr
 
 #ccall quad_forest_free , Ptr <quad_forest> -> IO ()
 
-#ccall quad_forest_create , Ptr <quad_forest> -> Ptr <pixel_image> \
-  -> CULong -> CULong -> IO <result>
+#ccall quad_forest_create , Ptr <quad_forest> -> Ptr <pixel_image> -> CULong \
+  -> CULong -> IO <result>
 
 #ccall quad_forest_reload , Ptr <quad_forest> ->  CULong -> CULong \
   -> IO <result>
@@ -103,11 +103,11 @@ import Foreign.ForeignPtr
 
 #ccall quad_forest_update , Ptr <quad_forest> -> IO <result>
 
-#ccall quad_forest_segment_with_deviation , Ptr <quad_forest> \
-  -> CDouble -> CDouble -> IO <result>
+#ccall quad_forest_segment_with_deviation , Ptr <quad_forest> -> CDouble \
+  -> CDouble -> IO <result>
 
-#ccall quad_forest_segment_with_overlap , Ptr <quad_forest> \
-  -> CDouble -> CDouble -> CDouble -> IO <result>
+#ccall quad_forest_segment_with_overlap , Ptr <quad_forest> -> CDouble \
+  -> CDouble -> CDouble -> IO <result>
 
 #ccall quad_forest_get_segments , Ptr <quad_forest> \
   -> Ptr (Ptr <quad_forest_segment>) -> IO <result>
@@ -128,8 +128,8 @@ import Foreign.ForeignPtr
 #ccall quad_tree_get_child_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> Ptr <quad_tree> -> IO <result>
 
-#ccall quad_tree_get_neighborhood_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
-  -> Ptr <statistics> -> CDouble -> IO <result>
+#ccall quad_tree_get_neighborhood_statistics , Ptr <quad_forest> \
+  -> Ptr <quad_tree> -> Ptr <statistics> -> CDouble -> IO <result>
 
 #ccall quad_tree_divide_with_overlap , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> CDouble -> CDouble -> IO <result>
@@ -153,8 +153,9 @@ import Foreign.ForeignPtr
 
 #ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()
 
-#ccall quad_tree_segment_find , Ptr <quad_tree> -> IO (Ptr <quad_forest_segment>)
+#ccall quad_tree_segment_find , Ptr <quad_tree> \
+  -> IO (Ptr <quad_forest_segment>)
 
-#ccall quad_tree_segment_get , Ptr <quad_tree> -> IO (CULong)
+#ccall quad_tree_segment_get , Ptr <quad_tree> -> IO CULong
 
 #ccall quad_tree_is_segment_parent , Ptr <quad_tree> -> IO <truth_value>

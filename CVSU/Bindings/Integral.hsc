@@ -20,25 +20,6 @@ import Foreign.Ptr
 #field stride   , CULong
 #stoptype
 
-#starttype small_integral_image_box
-#field I_1_data , <SI_1_t>
-#field iA       , Ptr <SI_1_t>
-#field sum      , Ptr <SI_1_t>
-#field I_2_data , Ptr <SI_2_t>
-#field i2A      , Ptr <SI_2_t>
-#field sumsqr   , <SI_2_t>
-#field offset   , CULong
-#field B_inc    , CULong
-#field C_inc    , CULong
-#field D_inc    , CULong
-#field N        , CULong
-#field step     , CULong
-#field stride   , CULong
-#field dx       , CULong
-#field dy       , CULong
-#field channel  , CULong
-#stoptype
-
 #ccall integral_image_alloc , IO (Ptr <integral_image>)
 
 #ccall integral_image_free , Ptr <integral_image> -> IO ()
@@ -49,6 +30,8 @@ import Foreign.Ptr
 #ccall integral_image_destroy , Ptr <integral_image> -> IO <result>
 
 #ccall integral_image_nullify , Ptr <integral_image> -> IO <result>
+
+#ccall integral_image_is_null , Ptr <integral_image> -> IO <truth_value>
 
 #ccall integral_image_clone , Ptr <integral_image> -> Ptr <integral_image> \
   -> IO <result>
@@ -61,15 +44,16 @@ import Foreign.Ptr
 #ccall integral_image_calculate_mean , Ptr <integral_image> -> CLong -> CLong \
   -> CLong -> CLong -> CULong -> IO CDouble
 
-#ccall integral_image_calculate_variance , Ptr <integral_image> -> CLong -> CLong \
-  -> CLong -> CLong -> CULong -> IO CDouble
+#ccall integral_image_calculate_variance , Ptr <integral_image> -> CLong \
+  -> CLong -> CLong -> CLong -> CULong -> IO CDouble
 
-#ccall integral_image_calculate_statistics , Ptr <integral_image> -> Ptr <statistics> \
-  -> CLong -> CLong -> CLong -> CLong -> CULong -> IO ()
+#ccall integral_image_calculate_statistics , Ptr <integral_image> \
+  -> Ptr <statistics> -> CLong -> CLong -> CLong -> CLong -> CULong -> IO ()
 
-#ccall integral_image_threshold_sauvola , Ptr <integral_image> -> Ptr <pixel_image> \
-  -> <truth_value> -> CULong -> CDouble -> <truth_value> -> CDouble \
-  -> <truth_value> -> IO <result>
+#ccall integral_image_threshold_sauvola , Ptr <integral_image> \
+  -> Ptr <pixel_image> -> <truth_value> -> CULong -> CDouble -> <truth_value> \
+  -> CDouble -> <truth_value> -> IO <result>
 
-#ccall integral_image_threshold_feng , Ptr <integral_image> -> Ptr <pixel_image> \
-  -> <truth_value> -> CULong -> CDouble -> <truth_value> -> CDouble -> IO <result>
+#ccall integral_image_threshold_feng , Ptr <integral_image> \
+  -> Ptr <pixel_image> -> <truth_value> -> CULong -> CDouble -> <truth_value> \
+  -> CDouble -> IO <result>

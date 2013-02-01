@@ -35,13 +35,18 @@ import Foreign.Ptr
 
 #ccall edge_image_destroy , Ptr <edge_image> -> IO <result>
 
+#ccall edge_image_nullify , Ptr <edge_image> -> IO <result>
+
+#ccall edge_image_is_null , Ptr <edge_image> -> IO <truth_value>
+
 #ccall edge_image_clone , Ptr <edge_image> -> Ptr <edge_image> -> IO <result>
 
 #ccall edge_image_copy , Ptr <edge_image> -> Ptr <edge_image> -> IO <result>
 
 #ccall edge_image_update , Ptr <edge_image> -> IO <result>
 
-#ccall edge_image_convert_to_grey8 , Ptr <edge_image> -> Ptr <pixel_image> -> \
-  Ptr <pixel_image> -> IO <result>
+#ccall edge_image_convert_to_grey8 , Ptr <edge_image> -> Ptr <pixel_image> \
+  -> Ptr <pixel_image> -> IO <result>
 
-#ccall edge_image_overlay_to_grey8 , Ptr <edge_image> -> Ptr <pixel_image> -> IO <result>
+#ccall edge_image_overlay_to_grey8 , Ptr <edge_image> -> Ptr <pixel_image> \
+  -> IO <result>

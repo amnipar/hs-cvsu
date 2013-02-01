@@ -48,6 +48,8 @@ import Foreign.C.Types
 
 #ccall list_nullify , Ptr <list> -> IO <result>
 
+#ccall list_is_null , Ptr <list> -> IO <truth_value>
+
 #ccall list_clear , Ptr <list> -> IO <result>
 
 #ccall list_append , Ptr <list> -> Ptr () -> IO <result>
