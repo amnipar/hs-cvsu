@@ -28,24 +28,18 @@ allocList = do
      else error "Memory allocation failed in allocList"
 
 listFirst :: Ptr C'list -> IO (Ptr C'list_item)
-listFirst l_ptr = do
-    l <- peek l_ptr
-    let pi = c'list_item'next $ c'list'first l
-    i <- peek pi
-    return pi
+listFirst plist = do
+  list <- peek plist
+  return $ c'list_item'next $ c'list'first list
 
 listNext :: Ptr C'list_item -> IO (Ptr C'list_item)
-listNext i_ptr = do
-    i <- peek i_ptr
-    let pn = c'list_item'next i
-    n <- peek pn
-    return pn
+listNext pitem = do
+  item <- peek pitem
+  return $ c'list_item'next item
 
 listLast :: Ptr C'list -> IO (Ptr C'list_item)
-listLast l_ptr = do
-  let pl = p'list'last l_ptr
-  l <- peek pl
-  return pl
+listLast plist =
+  return $ p'list'last plist
 
 createList :: ForeignPtr C'list -> (Ptr C'list_item -> IO a) -> IO [a]
 createList flist op =
@@ -55,14 +49,14 @@ createList flist op =
       else do
         l <- listLast plist
         f <- listFirst plist
-        ls <- recurseList l op f
+        ls <- recurseList op l f
         --ls `seq` return ls
         return $! ls
   where
-    recurseList l f i
+    recurseList op l i
       | l == i = return []
       | otherwise = do
         n <- listNext i
-        xs <- recurseList l f n
-        x <- f i
+        xs <- recurseList op l n
+        x <- op i
         x `seq` xs `seq` return $! x:xs -- liftM (:) (f i) (recurseList l f n) ??
