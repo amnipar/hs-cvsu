@@ -26,6 +26,7 @@ Library
     CVSU.Integral
     CVSU.Edges
     CVSU.QuadForest
+    CVSU.Moments
   Other-Modules:
     CVSU.Bindings.Types
     CVSU.Bindings.List
