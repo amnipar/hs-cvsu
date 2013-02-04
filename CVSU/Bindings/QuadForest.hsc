@@ -86,6 +86,35 @@ import Foreign.ForeignPtr
 
 #ccall quad_tree_is_null , Ptr <quad_tree> -> IO <truth_value>
 
+#ccall quad_tree_divide , Ptr <quad_forest> -> Ptr <quad_tree> -> IO <result>
+
+#ccall quad_tree_has_children , Ptr <quad_tree> -> IO <truth_value>
+
+#ccall quad_tree_get_child_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr <quad_tree> -> IO <result>
+
+#ccall quad_tree_get_neighborhood_statistics , Ptr <quad_forest> \
+  -> Ptr <quad_tree> -> Ptr <statistics> -> CDouble -> IO <result>
+
+#ccall quad_tree_divide_with_overlap , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> CDouble -> CDouble -> IO <result>
+
+#ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr CDouble -> Ptr CDouble -> IO <result>
+
+#ccall quad_tree_get_neighbors , Ptr <list> -> Ptr <quad_tree> -> IO <result>
+
+#ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
+
+#ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()
+
+#ccall quad_tree_segment_find , Ptr <quad_tree> \
+  -> IO (Ptr <quad_forest_segment>)
+
+#ccall quad_tree_segment_get , Ptr <quad_tree> -> IO CULong
+
+#ccall quad_tree_is_segment_parent , Ptr <quad_tree> -> IO <truth_value>
+
 #ccall quad_forest_alloc , IO (Ptr <quad_forest>)
 
 #ccall quad_forest_free , Ptr <quad_forest> -> IO ()
@@ -113,6 +142,12 @@ import Foreign.ForeignPtr
 #ccall quad_forest_get_segments , Ptr <quad_forest> \
   -> Ptr (Ptr <quad_forest_segment>) -> IO <result>
 
+#ccall quad_forest_get_segment_trees , Ptr <list> -> Ptr <quad_forest> \
+  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> IO <result>
+
+#ccall quad_forest_get_segment_neighbors , Ptr <list> -> Ptr <quad_forest> \
+  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> IO <result>
+
 #ccall quad_forest_get_segment_mask , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> <truth_value> -> IO <result>
 
@@ -122,36 +157,9 @@ import Foreign.ForeignPtr
 #ccall quad_forest_draw_image , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> <truth_value> -> <truth_value> -> IO <result>
 
-#ccall quad_tree_divide , Ptr <quad_forest> -> Ptr <quad_tree> -> IO <result>
-
-#ccall quad_tree_has_children , Ptr <quad_tree> -> IO <truth_value>
-
-#ccall quad_tree_get_child_statistics , Ptr <quad_forest> -> Ptr <quad_tree> \
-  -> Ptr <quad_tree> -> IO <result>
-
-#ccall quad_tree_get_neighborhood_statistics , Ptr <quad_forest> \
-  -> Ptr <quad_tree> -> Ptr <statistics> -> CDouble -> IO <result>
-
-#ccall quad_tree_divide_with_overlap , Ptr <quad_forest> -> Ptr <quad_tree> \
-  -> CDouble -> CDouble -> IO <result>
-
-#ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
-  -> Ptr CDouble -> Ptr CDouble -> IO <result>
-
 #ccall quad_forest_find_edges , Ptr <quad_forest> -> CULong -> CDouble \
   -> <direction> -> IO <result>
 
-#ccall quad_forest_segment_horizontal_edges , Ptr <quad_forest> -> CULong \
+#ccall quad_forest_segment_edges , Ptr <quad_forest> -> CULong \
   -> CDouble -> <direction> -> CULong -> CDouble -> <direction> -> <direction> \
   -> IO <result>
-
-#ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
-
-#ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()
-
-#ccall quad_tree_segment_find , Ptr <quad_tree> \
-  -> IO (Ptr <quad_forest_segment>)
-
-#ccall quad_tree_segment_get , Ptr <quad_tree> -> IO CULong
-
-#ccall quad_tree_is_segment_parent , Ptr <quad_tree> -> IO <truth_value>
