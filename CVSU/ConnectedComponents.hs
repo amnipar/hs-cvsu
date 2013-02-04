@@ -20,22 +20,21 @@ import Foreign.Concurrent
 
 data ConnectedComponent =
   ConnectedComponent
-  { x :: Int
-  , y :: Int
-  , w :: Int
-  , h :: Int
-  , color :: (Float,Float,Float)
+  { componentX :: Int
+  , componentY :: Int
+  , componentW :: Int
+  , componentH :: Int
+  , componentColor :: (Float,Float,Float)
   }
 
 data ConnectedComponents =
   ConnectedComponents
   { connectedPtr :: !(ForeignPtr C'connected_components)
-  , original :: PixelImage
-  , width :: Int
-  , height :: Int
-  , components :: [ConnectedComponent]
+  , connectedImage :: PixelImage
+  , connectedWidth :: Int
+  , connectedHeight :: Int
+  , connectedComponents :: [ConnectedComponent]
   }
-
 
 allocConnectedComponents :: IO (ForeignPtr C'connected_components)
 allocConnectedComponents = do
