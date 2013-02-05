@@ -4,6 +4,8 @@ module CVSU.QuadForest
 ( QuadTree(..)
 , QuadForest(..)
 , ForestSegment(..)
+, forestSegmentUnion
+, forestSegmentNeighbors
 , ForestEdge(..)
 , segmentLeft
 , segmentTop
@@ -32,7 +34,6 @@ module CVSU.QuadForest
 , quadForestSegmentEdges
 , quadForestGetSegments
 , quadForestGetSegmentTrees
-, quadForestGetSegmentNeighbors
 , quadForestGetSegmentMask
 , quadForestHighlightSegments
 , quadForestDrawImage
@@ -182,18 +183,18 @@ quadTreeFromListItem pitem = do
 --   effects as the original tree will have four child trees after this
 --   operation.
 quadTreeDivide :: QuadForest -> QuadTree -> IO [QuadTree]
-quadTreeDivide f t =
-  withForeignPtr (quadForestPtr f) $ \pforest -> do
-    r <- c'quad_tree_divide pforest (quadTreePtr t)
+quadTreeDivide forest tree =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_tree_divide pforest (quadTreePtr tree)
     if r /= c'SUCCESS
       then error $ "Divide tree failed with " ++ (show r)
       else do
-        ct <- peek (quadTreePtr t)
-        mapM quadTreeFromPtr
-          [ c'quad_tree'nw ct
-          , c'quad_tree'ne ct
-          , c'quad_tree'sw ct
-          , c'quad_tree'se ct ]
+        ctree <- peek (quadTreePtr tree)
+        liftM (filter (/=EmptyQuadTree)) $ mapM quadTreeFromPtr
+          [ c'quad_tree'nw ctree
+          , c'quad_tree'ne ctree
+          , c'quad_tree'sw ctree
+          , c'quad_tree'se ctree ]
 
 quadTreeChildStat :: QuadForest -> QuadTree -> IO [Statistics]
 quadTreeChildStat f t =
@@ -263,12 +264,14 @@ quadTreeSegmentInit t = do
 --   the same classId. Loses persistency, as the classId is changed in the
 --   underlying c structure, so previous versions of the trees that still
 --   point to the same c structure will have different classId.
-quadTreeSegmentUnion :: (QuadTree,QuadTree) -> IO (QuadTree,QuadTree)
-quadTreeSegmentUnion (t1,t2) = do
+quadTreeSegmentUnion :: QuadTree -> QuadTree -> IO ()
+quadTreeSegmentUnion t1 t2 =
   c'quad_tree_segment_union (quadTreePtr t1) (quadTreePtr t2)
-  t1' <- quadTreeFromPtr $ quadTreePtr t1
-  t2' <- quadTreeFromPtr $ quadTreePtr t2
-  return $! (t1,t2)
+
+-- | Creates a union of two segments that are larger than trees.
+forestSegmentUnion :: ForestSegment -> ForestSegment -> IO ()
+forestSegmentUnion s1 s2 =
+  c'quad_forest_segment_union (segmentPtr s1) (segmentPtr s2)
 
 -- | Find part of the Union-Find disjunctive set algorithm. Finds the pointer
 --   of the parent tree, caches it in the c structure, and creates an Integer
@@ -355,8 +358,8 @@ quadForestUpdate f = do
 --   c structure. Required after operations causing side effects to ensure
 --   consistency of the whole data structure.
 quadForestRefresh :: QuadForest -> IO QuadForest
-quadForestRefresh f =
-  withForeignPtr (quadForestPtr f) $ \pforest -> do
+quadForestRefresh forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
     C'quad_forest{
       c'quad_forest'rows = r,
       c'quad_forest'cols = c,
@@ -370,8 +373,8 @@ quadForestRefresh f =
     rs <- peekArray (fromIntegral $ r*c) proots
     ts <- mapM quadTreeFromPtr rs
     return $ QuadForest
-      (quadForestPtr f)
-      (quadForestImage f)
+      (quadForestPtr forest)
+      (quadForestImage forest)
       (fromIntegral r)
       (fromIntegral c)
       (fromIntegral s)
@@ -380,6 +383,14 @@ quadForestRefresh f =
       (fromIntegral dx)
       (fromIntegral dy)
       ts
+
+quadForestRefreshSegments :: QuadForest -> IO QuadForest
+quadForestRefreshSegments forest = do
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_refresh_segments pforest
+    if r /= c'SUCCESS
+      then error $ "Refresh segments failed with " ++ (show r)
+      else quadForestRefresh forest
 
 withQuadForest :: QuadForest -> (QuadForest -> IO a) -> IO a
 withQuadForest f op =
@@ -397,40 +408,53 @@ quadForestGetTree f (x,y) =
     quadTreeFromPtr root
 
 -- | Segments a forest by dividing trees until they are consistent by the
---   given measure, and by grouping neighboring trees, that are deemed equal in
---   terms of the provided equivalence operation, by using equivalence classes
---   implemented for image trees using Union-Find algorithm. The result is a
---   segmented forest where trees belonging to the same region have the same
---   classId. Note: the treeDivide and treeClassUnion operations cause side
---   effects, so this whole operation must be performed in full to leave the
---   tree list in consistent state, and in the current form, the algorithm is
---   not safe to parallelize (though in future it probably will be). Also the
---   resulting Haskell data structure is not persistent (may be later).
+--   given measure, and by merging neighboring trees and segments that are
+--   deemed equal in terms of the provided equivalence operation. Merging is
+--   done by using disjoint sets implemented for image trees using Union-Find
+--   algorithm. The result is a segmented forest where trees belonging to the
+--   same segment have the same parent segment.
+--   Note: the treeDivide and treeClassUnion operations cause side effects, so
+--   this whole operation must be performed in full to leave the tree list in
+--   consistent state, and in the current form, the algorithm is not safe to
+--   parallelize (though in future it probably will be). Also the resulting
+--   Haskell data structure is not persistent (may be later).
 quadForestSegment :: (QuadTree -> Bool) -> (QuadTree -> QuadTree -> Bool)
-    -> QuadForest -> IO QuadForest
-quadForestSegment isConsistent isEq f = do
-  ts <- segment $ quadForestTrees f
-  ts `seq` quadForestRefresh f
+    -> (ForestSegment -> ForestSegment -> Bool) -> QuadForest -> IO QuadForest
+quadForestSegment treeConsistent treesEqual segmentsEqual forest = do
+  -- first divide trees until they are consistent, and merge similar neighbors
+  mergeTrees =<< divideUntilConsistent (quadForestTrees forest)
+  -- next, get the segments resulting from merging trees and merge similar neighbors
+  mergeSegments =<< quadForestGetSegments =<< quadForestRefreshSegments forest
+  -- finally refresh the forest
+  quadForestRefresh forest
   where
-    minSize = quadForestMinSize f
-    -- find all neighbors and create a union with those that are equivalent and
-    -- consistent according to given measures
-    --unionWithNeighbors :: (ForestValue a) => ImageTree a -> IO [(ImageTree a, ImageTree a)]
-    unionWithNeighbors t = do
-      ns :: [QuadTree] <- quadTreeNeighbors t
-      mapM_ (quadTreeSegmentUnion.(t,)) $ filter (\n -> (isConsistent n) && (isEq t n)) ns
-    -- go through all trees; add consistent ones to segments, divide in four
-    -- the inconsistent ones
-    --segment :: (ForestValue a) => [ImageTree a] -> IO ()
-    segment [] = return ()
-    segment (t:ts)
-      | isConsistent t = do
-        rs <- unionWithNeighbors t
-        rs `seq` segment ts
-      | quadTreeSize t > minSize = do
-        cs <- quadTreeDivide f t
-        cs `seq` segment (ts ++ cs)
-      | otherwise = segment ts
+    minSize = quadForestMinSize forest
+    -- go through all trees
+    -- add consistent ones to segments, divide in four the inconsistent ones
+    divideUntilConsistent [] = return []
+    divideUntilConsistent (t:ts)
+      | treeConsistent t = do
+        t' <- quadTreeSegmentInit t
+        ts' <- divideUntilConsistent ts
+        t' `seq` ts' `seq` return (t':ts')
+      | quadTreeSize t >= 2 * minSize = do
+        cs <- quadTreeDivide forest t
+        cs `seq` divideUntilConsistent (ts ++ cs)
+      | otherwise = divideUntilConsistent ts
+    -- go through all trees and find neighbors
+    -- merge with neighboring trees that are equal
+    mergeTrees [] = return ()
+    mergeTrees (t:ts) = do
+      ns <- quadTreeNeighbors t
+      mapM_ (quadTreeSegmentUnion t) $ filter (treesEqual t) ns
+      mergeTrees ts
+    -- go through all segments and find neighbors
+    -- merge with neighboring segments that are equal
+    mergeSegments [] = return ()
+    mergeSegments (s:ss) = do
+      ns <- forestSegmentNeighbors forest [s]
+      mapM_ (forestSegmentUnion s) $ filter (segmentsEqual s) ns
+      mergeSegments ss
 
 quadForestSegmentByDeviation :: Double -> Double -> QuadForest -> IO QuadForest
 quadForestSegmentByDeviation threshold alpha f =
@@ -502,11 +526,11 @@ quadForestGetSegmentTrees forest ss = do -- 14 x 29
         r <- c'quad_forest_get_segment_trees plist pforest psegments
             (fromIntegral $ length ss)
         if r /= c'SUCCESS
-           then error $ "Gettin segment trees failed with " ++ (show r)
+           then error $ "Getting segment trees failed with " ++ (show r)
            else createList flist quadTreeFromListItem
 
-quadForestGetSegmentNeighbors :: QuadForest -> [ForestSegment] -> IO [ForestSegment]
-quadForestGetSegmentNeighbors forest ss = do
+forestSegmentNeighbors :: QuadForest -> [ForestSegment] -> IO [ForestSegment]
+forestSegmentNeighbors forest ss = do
   flist <- allocList
   withForeignPtr flist $ \plist ->
     withForeignPtr (quadForestPtr forest) $ \pforest ->

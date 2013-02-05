@@ -106,6 +106,9 @@ import Foreign.ForeignPtr
 
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
 
+#ccall quad_forest_segment_union , Ptr <quad_forest_segment> \
+  -> Ptr <quad_forest_segment> -> IO ()
+
 #ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()
 
 #ccall quad_tree_segment_find , Ptr <quad_tree> \
@@ -124,6 +127,8 @@ import Foreign.ForeignPtr
 
 #ccall quad_forest_reload , Ptr <quad_forest> ->  CULong -> CULong \
   -> IO <result>
+
+#ccall quad_forest_refresh_segments , Ptr <quad_forest> -> IO <result>
 
 #ccall quad_forest_destroy , Ptr <quad_forest> -> IO <result>
 

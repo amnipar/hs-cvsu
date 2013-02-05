@@ -111,13 +111,6 @@ import Foreign.Ptr
 #field bottom , <point>
 #stoptype
 
--- dir type
-
-#starttype dir
-#field h , CShort
-#field v , CShort
-#stoptype
-
 -- statistics type
 
 #starttype statistics

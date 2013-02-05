@@ -51,9 +51,9 @@ import Foreign.Ptr
   -> Ptr <statistics> -> CLong -> CLong -> CLong -> CLong -> CULong -> IO ()
 
 #ccall integral_image_threshold_sauvola , Ptr <integral_image> \
-  -> Ptr <pixel_image> -> <truth_value> -> CULong -> CDouble -> <truth_value> \
+  -> Ptr <pixel_image> -> <truth_value> -> CLong -> CDouble -> <truth_value> \
   -> CDouble -> <truth_value> -> IO <result>
 
 #ccall integral_image_threshold_feng , Ptr <integral_image> \
-  -> Ptr <pixel_image> -> <truth_value> -> CULong -> CDouble -> <truth_value> \
+  -> Ptr <pixel_image> -> <truth_value> -> CLong -> CDouble -> <truth_value> \
   -> CDouble -> IO <result>
