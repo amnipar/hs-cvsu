@@ -6,6 +6,13 @@ This library contains bindings to the c code in cvsu library, based on
 bindings-dsl, haskell types wrapped around them, and many functions for
 utilizing the scene understanding features of cvsu.
 
+This is research-grade code for my PhD project and may be useful to others as
+well, but no guarantees are given. The master branch should be in usable state
+most of the time, while the dev branch contains new, experimental features.
+
+The most up-to-date version will be always available in repository
+git@github.com:amnipar/hs-cvsu.git
+
 Installation:
 
 cabal-dev is recommended for experimenting with this library, though normal
@@ -17,3 +24,6 @@ At the moment you need to get the c sources of cvsu into hs-cvsu directory
 cd hs-cvsu
 git clone git@yousource.it.jyu.fi:cvsu/cvsu.git c
 cabal-dev install
+
+You can also host the cvsu code in another path and use a symbolic link in the
+hs-cvsu folder.

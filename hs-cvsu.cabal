@@ -88,4 +88,4 @@ Library
 
 source-repository head
   type:     git
-  location: git@yousource.it.jyu.fi:hs-cvsu/hs-cvsu.git
+  location: git@github.com:amnipar/hs-cvsu.git
