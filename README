@@ -15,6 +15,8 @@ git@github.com:amnipar/hs-cvsu.git
 
 Installation:
 
+Haskell platform (at least version 2012.0.0.2) is required for using this.
+
 cabal-dev is recommended for experimenting with this library, though normal
 cabal works as well.
 
@@ -27,3 +29,9 @@ cabal-dev install
 
 You can also host the cvsu code in another path and use a symbolic link in the
 hs-cvsu folder.
+
+cv-cvsu library at
+git@github.com:amnipar/cv-cvsu.git
+Is useful for using this library with the CV library
+git://github.com/aleator/CV.git
+which is a Haskell interface to OpenCV library.
