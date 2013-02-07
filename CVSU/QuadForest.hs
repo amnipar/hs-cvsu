@@ -306,11 +306,11 @@ quadForestAlloc = do
     then newForeignPtr ptr (c'quad_forest_free ptr)
     else error "Memory allocation failed in quadForestAlloc"
 
-quadForestInit :: PixelImage -> Int -> Int -> IO QuadForest
-quadForestInit i maxSize minSize = do
+quadForestInit :: Int -> Int -> PixelImage -> IO QuadForest
+quadForestInit maxSize minSize image = do
   fforest <- quadForestAlloc
   withForeignPtr fforest $ \pforest ->
-    withForeignPtr (imagePtr i) $ \pimage -> do
+    withForeignPtr (imagePtr image) $ \pimage -> do
       r1 <- c'quad_forest_create pforest pimage (fromIntegral maxSize) (fromIntegral minSize)
       if r1 /= c'SUCCESS
         then error $ "Quad forest create failed with " ++ (show r1)
@@ -324,7 +324,7 @@ quadForestInit i maxSize minSize = do
             c'quad_forest'dx = dx,
             c'quad_forest'dy = dy
           } <- peek pforest
-          return $ QuadForest fforest i
+          return $ QuadForest fforest image
             (fromIntegral r)
             (fromIntegral c)
             (fromIntegral s)
@@ -336,10 +336,9 @@ quadForestInit i maxSize minSize = do
 
 -- | Creates the forest structure, given an image and number of rows and
 --   columns in the root tree array.
-quadForestCreate :: PixelImage -> Int -> Int -> IO QuadForest
-quadForestCreate i maxSize minSize = do
-  f <- quadForestInit i maxSize minSize
-  quadForestUpdate f
+quadForestCreate :: Int -> Int -> PixelImage -> IO QuadForest
+quadForestCreate maxSize minSize image =
+  quadForestUpdate =<< quadForestInit maxSize minSize image
 
 -- | Updates the underlying integral images of the forest, invalidating the
 --   tree contents; thus it requires a refresh. Can be used for processing
@@ -426,7 +425,7 @@ quadForestSegment treeConsistent treesEqual segmentsEqual forest = do
   -- next, get the segments resulting from merging trees and merge similar neighbors
   mergeSegments =<< quadForestGetSegments =<< quadForestRefreshSegments forest
   -- finally refresh the forest
-  quadForestRefresh forest
+  quadForestRefresh =<< quadForestRefreshSegments forest
   where
     minSize = quadForestMinSize forest
     -- go through all trees
