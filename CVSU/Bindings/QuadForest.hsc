@@ -102,6 +102,9 @@ import Foreign.ForeignPtr
 #ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> Ptr CDouble -> Ptr CDouble -> IO <result>
 
+#ccall quad_tree_get_child_edge_response , Ptr <quad_forest> \
+  -> Ptr <quad_tree> -> Ptr CDouble -> Ptr CDouble -> IO <result>
+
 #ccall quad_tree_get_neighbors , Ptr <list> -> Ptr <quad_tree> -> IO <result>
 
 #ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()

@@ -19,6 +19,7 @@ module CVSU.QuadForest
 , quadTreeDivide
 , quadTreeNeighbors
 , quadTreeEdgeResponse
+, quadTreeChildEdgeResponse
 , quadTreeSegmentInit
 , quadTreeSegmentUnion
 , quadTreeSegmentFind
@@ -26,7 +27,9 @@ module CVSU.QuadForest
 , quadForestCreate
 , quadForestUpdate
 , quadForestRefresh
+, quadForestGetTopLevelTrees
 , quadForestGetTree
+, divideUntilConsistent
 , quadForestSegment
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
@@ -233,7 +236,7 @@ quadTreeNeighbors tree = do
       then error $ "Getting tree neighbors failed with " ++ (show r)
       else createList flist quadTreeFromListItem
 
-quadTreeEdgeResponse :: QuadForest -> QuadTree -> IO Double
+quadTreeEdgeResponse :: QuadForest -> QuadTree -> IO (Double,Double)
 quadTreeEdgeResponse f t =
   withForeignPtr (quadForestPtr f) $ \pforest -> do
     let
@@ -249,7 +252,24 @@ quadTreeEdgeResponse f t =
           else do
             rdx <- peek pdx
             rdy <- peek pdy
-            return $ sqrt $ (realToFrac rdx)**2 + (realToFrac rdy)**2
+            return (realToFrac rdx, realToFrac rdy)
+            --return $ sqrt $ (realToFrac rdx)**2 + (realToFrac rdy)**2
+
+quadTreeChildEdgeResponse :: QuadForest -> QuadTree -> IO [(Double,Double)]
+quadTreeChildEdgeResponse f t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+      allocDArray :: IO (Ptr CDouble)
+      allocDArray = mallocArray 4
+    pdx <- allocDArray
+    pdy <- allocDArray
+    r <- c'quad_tree_get_child_edge_response pforest (quadTreePtr t) pdx pdy
+    if r /= c'SUCCESS
+      then error $ "Get child edge response failed with " ++ (show r)
+      else do
+        xs <- (peekArray 4 pdx)
+        ys <- (peekArray 4 pdy)
+        return $ zip (map realToFrac xs) (map realToFrac ys)
 
 -- | Initializes a disjunctive set for the tree by setting the parent to
 --   self and rank to zero.
@@ -398,6 +418,20 @@ withQuadForest f op =
     touchForeignPtr (quadForestPtr f)
     return $! r
 
+quadForestGetTopLevelTrees :: QuadForest -> [QuadTree]
+quadForestGetTopLevelTrees forest = concatMap getTrees $ quadForestTrees forest
+  where
+    getTrees EmptyQuadTree = []
+    getTrees t
+      | null cs = [t]
+      | otherwise = cs
+      where
+        cs = concatMap getTrees $
+          [ quadTreeChildNW t
+          , quadTreeChildNE t
+          , quadTreeChildSW t
+          , quadTreeChildSE t ]
+
 -- | Extract the given root tree from the forest
 quadForestGetTree :: QuadForest -> (Int,Int) -> IO QuadTree
 quadForestGetTree f (x,y) =
@@ -405,6 +439,24 @@ quadForestGetTree f (x,y) =
     forest <- peek pforest
     root <- peek $ advancePtr (c'quad_forest'roots forest) (y * (quadForestCols f) + x)
     quadTreeFromPtr root
+
+-- | Goes through the listed trees, divides those that are inconsistent,
+--   discards those that would become too small if divided
+divideUntilConsistent :: (QuadTree -> Bool) -> QuadForest -> [QuadTree] -> IO [QuadTree]
+divideUntilConsistent treeConsistent forest trees = divide ([], trees)
+  where
+    minSize = quadForestMinSize forest
+    divide (rs,[]) = return rs
+    divide (rs,ts) = do
+      print "divide"
+      let
+        (cs,is) = foldl separate ([],[]) ts
+      ts' <- mapM (quadTreeDivide forest) is
+      divide (rs ++ cs, concat ts')
+    separate (cs,is) t
+      | treeConsistent t = (t:cs,is)
+      | quadTreeSize t >= 2 * minSize = (cs,t:is)
+      | otherwise = (cs,is)
 
 -- | Segments a forest by dividing trees until they are consistent by the
 --   given measure, and by merging neighboring trees and segments that are
@@ -421,39 +473,36 @@ quadForestSegment :: (QuadTree -> Bool) -> (QuadTree -> QuadTree -> Bool)
     -> (ForestSegment -> ForestSegment -> Bool) -> QuadForest -> IO QuadForest
 quadForestSegment treeConsistent treesEqual segmentsEqual forest = do
   -- first divide trees until they are consistent, and merge similar neighbors
-  mergeTrees =<< divideUntilConsistent (quadForestTrees forest)
+  mergeTrees =<< mapM quadTreeSegmentInit =<<
+      divideUntilConsistent treeConsistent forest (quadForestTrees forest)
+  print "merged trees"
   -- next, get the segments resulting from merging trees and merge similar neighbors
-  mergeSegments =<< quadForestGetSegments =<< quadForestRefreshSegments forest
+  ss <- quadForestGetSegments =<< quadForestRefreshSegments forest
+  print $ "got segments " ++ (show $ length ss)
+  sr <- ss `deepseq` mergeSegments ss -- =<< quadForestGetSegments =<< quadForestRefreshSegments forest
+  print "merged segments"
   -- finally refresh the forest
-  quadForestRefresh =<< quadForestRefreshSegments forest
+  sr `deepseq` quadForestRefresh =<< quadForestRefreshSegments forest
   where
     minSize = quadForestMinSize forest
-    -- go through all trees
-    -- add consistent ones to segments, divide in four the inconsistent ones
-    divideUntilConsistent [] = return []
-    divideUntilConsistent (t:ts)
-      | treeConsistent t = do
-        t' <- quadTreeSegmentInit t
-        ts' <- divideUntilConsistent ts
-        t' `seq` ts' `seq` return (t':ts')
-      | quadTreeSize t >= 2 * minSize = do
-        cs <- quadTreeDivide forest t
-        cs `seq` divideUntilConsistent (ts ++ cs)
-      | otherwise = divideUntilConsistent ts
     -- go through all trees and find neighbors
     -- merge with neighboring trees that are equal
     mergeTrees [] = return ()
     mergeTrees (t:ts) = do
+      --t' <- quadTreeSegmentInit t
       ns <- quadTreeNeighbors t
-      mapM_ (quadTreeSegmentUnion t) $ filter (treesEqual t) ns
+      --let ens = filter (treesEqual t) ns
+      --print $ "neighbors " ++ (show $ length ns) ++ " equal " ++ (show $ length ens)
+      mapM (quadTreeSegmentUnion t) $ filter (treesEqual t) ns
       mergeTrees ts
     -- go through all segments and find neighbors
     -- merge with neighboring segments that are equal
     mergeSegments [] = return ()
     mergeSegments (s:ss) = do
-      ns <- forestSegmentNeighbors forest [s]
-      mapM_ (forestSegmentUnion s) $ filter (segmentsEqual s) ns
-      mergeSegments ss
+      ns <- forestSegmentNeighbors forest $! [s]
+      --let ens = filter
+      rs <- ns `deepseq` mapM (forestSegmentUnion s) $! filter (segmentsEqual s) ns
+      ns `deepseq` rs `deepseq` mergeSegments ss
 
 quadForestSegmentByDeviation :: Double -> Double -> QuadForest -> IO QuadForest
 quadForestSegmentByDeviation threshold alpha f =
@@ -595,12 +644,50 @@ quadForestDrawImage useRegions useColors forest = do
 deep :: NFData a => a -> a
 deep a = deepseq a a
 
+instance NFData Statistics where
+  rnf stat =
+    items stat `deepseq`
+    sum1 stat `deepseq`
+    sum2 stat `deepseq`
+    mean stat `deepseq`
+    variance stat `deepseq`
+    deviation stat `deepseq` ()
+
+instance NFData Direction where
+  rnf dir = dir `seq` ()
+
 instance NFData QuadTree where
   rnf tree =
+    quadTreeX tree `deepseq`
+    quadTreeY tree `deepseq`
+    quadTreeSize tree `deepseq`
+    quadTreeLevel tree `deepseq`
+    quadTreeStat tree `deepseq`
+    quadTreeEdge tree `seq`
     quadTreeChildNW tree `seq`
     quadTreeChildNE tree `seq`
     quadTreeChildSW tree `seq`
     quadTreeChildSE tree `seq` ()
+
+instance NFData ForestSegment where
+  rnf segment =
+    segmentX segment `deepseq`
+    segmentY segment `deepseq`
+    segmentW segment `deepseq`
+    segmentH segment `deepseq`
+    segmentStat segment `deepseq`
+    segmentColor segment `deepseq` ()
+
+instance NFData ForestEdge where
+  rnf edge =
+    edgeDX edge `deepseq`
+    edgeDY edge `deepseq`
+    edgeMag edge `deepseq`
+    edgeAng edge `deepseq`
+    edgeMean edge `deepseq`
+    edgeDev edge `deepseq`
+    edgeFound edge `deepseq`
+    edgeDir edge `deepseq` ()
 
 parMap' :: (a -> b) -> [a] -> Eval [b]
 parMap' f [] = return []
