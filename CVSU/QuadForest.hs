@@ -448,7 +448,7 @@ divideUntilConsistent treeConsistent forest trees = divide ([], trees)
     minSize = quadForestMinSize forest
     divide (rs,[]) = return rs
     divide (rs,ts) = do
-      print "divide"
+      --print "divide"
       let
         (cs,is) = foldl separate ([],[]) ts
       ts' <- mapM (quadTreeDivide forest) is
@@ -475,12 +475,12 @@ quadForestSegment treeConsistent treesEqual segmentsEqual forest = do
   -- first divide trees until they are consistent, and merge similar neighbors
   mergeTrees =<< mapM quadTreeSegmentInit =<<
       divideUntilConsistent treeConsistent forest (quadForestTrees forest)
-  print "merged trees"
+  --print "merged trees"
   -- next, get the segments resulting from merging trees and merge similar neighbors
   ss <- quadForestGetSegments =<< quadForestRefreshSegments forest
-  print $ "got segments " ++ (show $ length ss)
+  --print $ "got segments " ++ (show $ length ss)
   sr <- ss `deepseq` mergeSegments ss -- =<< quadForestGetSegments =<< quadForestRefreshSegments forest
-  print "merged segments"
+  --print "merged segments"
   -- finally refresh the forest
   sr `deepseq` quadForestRefresh =<< quadForestRefreshSegments forest
   where

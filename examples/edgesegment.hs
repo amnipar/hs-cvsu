@@ -7,6 +7,7 @@ import CVSU.QuadForest
 import CV.Image
 import CV.CVSU
 import CV.CVSU.Drawing
+import CV.CVSU.Rectangle
 
 import ReadArgs
 import Control.Applicative
@@ -21,8 +22,9 @@ consistent f t = unsafePerformIO $ do
     ds cs = map (\x -> (abs $ x - meanm) / devm) ms
       where
         ms = map (\(dx,dy) -> sqrt $ dx**2 + dy**2) cs
-        meanm = (sum ms) / 4
-        devm = sqrt $ min 1 ((sum $ map (**2) ms) / 4 - meanm**2)
+        l = fromIntegral $ length ms
+        meanm = (sum ms) / l
+        devm = sqrt $ max 1 ((sum $ map (**2) ms) / l - meanm**2)
 
 getFiles :: FilePath -> IO [FilePath]
 getFiles p =
@@ -62,8 +64,8 @@ main = do
   cforest <- quadForestRefresh forest
   let ctrees = quadForestGetTopLevelTrees cforest
   rs <- mapM (quadTreeEdgeResponse cforest) ctrees
-  print $ length rs
+  --print $ length rs
   eforest <- quadForestRefresh cforest
   let etrees = quadForestGetTopLevelTrees eforest
-  print $ map (edgeMag.quadTreeEdge) etrees
-  saveImage targetFile $ drawTreeValues (realToFrac.edgeMag.quadTreeEdge) etrees $ grayToRGB img
+  --print $ map (edgeMag.quadTreeEdge) etrees
+  saveImage targetFile $ drawBoxes (0,1,1) 1 (map treeToRect etrees) $ drawTreeValues (realToFrac.edgeMag.quadTreeEdge) etrees $ grayToRGB img
