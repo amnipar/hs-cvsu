@@ -17,16 +17,19 @@ import Foreign.ForeignPtr
 #integral_t quad_forest_status
 
 #starttype quad_forest_segment
-#field parent   , Ptr <quad_forest_segment>
-#field rank     , CULong
-#field x1       , CULong
-#field y1       , CULong
-#field x2       , CULong
-#field y2       , CULong
-#field stat     , <statistics>
-#field color[0] , Word8
-#field color[1] , Word8
-#field color[2] , Word8
+#field parent       , Ptr <quad_forest_segment>
+#field rank         , CULong
+#field x1           , CULong
+#field y1           , CULong
+#field x2           , CULong
+#field y2           , CULong
+#field stat         , <statistics>
+#field devmean      , CDouble
+#field devdev       , CDouble
+#field has_boundary , <truth_value>
+#field color[0]     , Word8
+#field color[1]     , Word8
+#field color[2]     , Word8
 #stoptype
 
 #starttype quad_forest_edge
@@ -167,6 +170,9 @@ import Foreign.ForeignPtr
 
 #ccall quad_forest_find_edges , Ptr <quad_forest> -> CULong -> CDouble \
   -> <direction> -> IO <result>
+
+#ccall quad_forest_find_boundaries , Ptr <quad_forest> -> CULong -> CDouble \
+  -> IO <result>
 
 #ccall quad_forest_segment_edges , Ptr <quad_forest> -> CULong \
   -> CDouble -> <direction> -> CULong -> CDouble -> <direction> -> <direction> \

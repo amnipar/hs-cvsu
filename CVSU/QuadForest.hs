@@ -34,6 +34,7 @@ module CVSU.QuadForest
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
 , quadForestFindEdges
+, quadForestFindBoundaries
 , quadForestSegmentEdges
 , quadForestGetSegments
 , quadForestGetSegmentTrees
@@ -77,6 +78,9 @@ data ForestSegment =
   , segmentW :: Int
   , segmentH :: Int
   , segmentStat :: Statistics
+  , segmentDevMean :: Double
+  , segmentDevDev :: Double
+  , segmentHasBoundary :: Bool
   , segmentColor :: (Float,Float,Float)
   } deriving Eq
 
@@ -85,7 +89,7 @@ segmentTop = segmentY
 segmentRight s = segmentX s + segmentW s
 segmentBottom s = segmentY s + segmentH s
 
-hForestSegment (C'quad_forest_segment p _ x1 y1 x2 y2 stat c1 c2 c3) =
+hForestSegment (C'quad_forest_segment p _ x1 y1 x2 y2 stat m d b c1 c2 c3) =
   ForestSegment
     p
     (fromIntegral x1)
@@ -93,6 +97,9 @@ hForestSegment (C'quad_forest_segment p _ x1 y1 x2 y2 stat c1 c2 c3) =
     (fromIntegral $ x2-x1)
     (fromIntegral $ y2-y1)
     (hStatistics stat)
+    (realToFrac m)
+    (realToFrac d)
+    (hBool b)
     (toColor c1 c2 c3)
   where
     makeC = (/255).realToFrac
@@ -145,6 +152,7 @@ data QuadTree = EmptyQuadTree |
   , quadTreeLevel :: Int
   , quadTreeStat :: Statistics
   , quadTreeEdge :: ForestEdge
+  , quadTreeSegment :: ForestSegment
   , quadTreeChildNW :: QuadTree
   , quadTreeChildNE :: QuadTree
   , quadTreeChildSW :: QuadTree
@@ -161,7 +169,7 @@ quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
 quadTreeFromPtr ptree
   | ptree == nullPtr = return EmptyQuadTree
   | otherwise        = do
-    (C'quad_tree x y s l stat _ edge _ nw ne sw se _ _ _ _ _ _ _ _) <- peek ptree
+    (C'quad_tree x y s l stat seg edge _ nw ne sw se _ _ _ _ _ _ _ _) <- peek ptree
     tnw <- quadTreeFromPtr nw
     tne <- quadTreeFromPtr ne
     tsw <- quadTreeFromPtr sw
@@ -173,6 +181,7 @@ quadTreeFromPtr ptree
       (fromIntegral l)
       (hStatistics stat)
       (hForestEdge edge)
+      (hForestSegment seg)
       tnw tne tsw tse
 
 -- | Creates an image tree from a list item by casting and converting
@@ -534,6 +543,16 @@ quadForestFindEdges rounds bias dir forest =
         (cDirection dir)
     if r /= c'SUCCESS
       then error $ "quadForestFindEdges failed with " ++ (show r)
+      else quadForestRefresh forest
+
+quadForestFindBoundaries :: Int -> Double -> QuadForest -> IO QuadForest
+quadForestFindBoundaries rounds bias forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_find_boundaries pforest
+        (fromIntegral rounds)
+        (realToFrac bias)
+    if r /= c'SUCCESS
+      then error $ "quadForestFindBoundaries failed with " ++ (show r)
       else quadForestRefresh forest
 
 quadForestSegmentEdges :: Int -> Double -> Direction -> Int -> Double
