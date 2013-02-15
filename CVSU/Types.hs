@@ -7,9 +7,11 @@ module CVSU.Types
 , Direction(..)
 , hDirection
 , cDirection
+, lineFromListItem
 ) where
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.List
 
 import Foreign.Ptr
 import Foreign.Storable
@@ -102,3 +104,15 @@ hDirection d
   | d == c'd_N4 = DirN4
   | d == c'd_N8 = DirN8
   | otherwise = error "unspecified direction"
+
+hPoint :: C'point -> (Int,Int)
+hPoint (C'point x y) = (fromIntegral x, fromIntegral y)
+
+hLine :: C'line -> ((Int,Int),(Int,Int))
+hLine (C'line start end) = (hPoint start, hPoint end)
+
+lineFromListItem :: Ptr C'list_item -> IO ((Int,Int),(Int,Int))
+lineFromListItem pitem = do
+  item <- peek pitem
+  line <- peek $ castPtr $ c'list_item'data item
+  return $ hLine line

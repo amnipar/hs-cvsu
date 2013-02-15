@@ -159,8 +159,14 @@ import Foreign.ForeignPtr
 #ccall quad_forest_get_segment_neighbors , Ptr <list> -> Ptr <quad_forest> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> IO <result>
 
+#ccall quad_forest_draw_trees , Ptr <quad_forest> -> Ptr <pixel_image> \
+  -> <truth_value> -> IO <result>
+
 #ccall quad_forest_get_segment_mask , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> <truth_value> -> IO <result>
+
+#ccall quad_forest_get_segment_boundary , Ptr <quad_forest> \
+  -> Ptr <quad_forest_segment> -> Ptr <list> -> IO <result>
 
 #ccall quad_forest_highlight_segments , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> Ptr CUChar -> IO <result>
@@ -177,3 +183,5 @@ import Foreign.ForeignPtr
 #ccall quad_forest_segment_edges , Ptr <quad_forest> -> CULong \
   -> CDouble -> <direction> -> CULong -> CDouble -> <direction> -> <direction> \
   -> IO <result>
+
+#ccall quad_forest_segment_with_boundaries , Ptr <quad_forest> -> IO <result>

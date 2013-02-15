@@ -33,14 +33,17 @@ module CVSU.QuadForest
 , quadForestSegment
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
+, quadForestSegmentByBoundaries
 , quadForestFindEdges
 , quadForestFindBoundaries
 , quadForestSegmentEdges
 , quadForestGetSegments
 , quadForestGetSegmentTrees
 , quadForestGetSegmentMask
+, quadForestGetSegmentBoundary
 , quadForestHighlightSegments
 , quadForestDrawImage
+, quadForestDrawTrees
 , mapDeep
 ) where
 
@@ -534,6 +537,14 @@ quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
       else quadForestRefresh forest
 
+quadForestSegmentByBoundaries :: QuadForest -> IO QuadForest
+quadForestSegmentByBoundaries forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_segment_with_boundaries pforest
+    if r /= c'SUCCESS
+      then error $ "Segment by boundaries failed with " ++ (show r)
+      else quadForestRefresh forest
+
 quadForestFindEdges :: Int -> Double -> Direction -> QuadForest -> IO QuadForest
 quadForestFindEdges rounds bias dir forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
@@ -626,6 +637,18 @@ quadForestGetSegmentMask forest invert ss = do
            then error $ "Getting segment mask failed with " ++ (show r)
            else ptrToPixelImage fimg
 
+-- | Extract the boundary curve of a segment as a list of lines
+quadForestGetSegmentBoundary :: QuadForest -> ForestSegment -> IO [((Int,Int),(Int,Int))]
+quadForestGetSegmentBoundary forest segment = do
+  flist <- allocList
+  withForeignPtr flist $ \plist ->
+    withForeignPtr (quadForestPtr forest) $ \pforest -> do
+      r <- c'quad_forest_get_segment_boundary pforest
+          (segmentPtr segment) plist
+      if r /= c'SUCCESS
+        then error $ "Getting segment boundary failed with " ++ (show r)
+        else createList flist lineFromListItem
+
 quadForestHighlightSegments :: QuadForest -> PixelImage -> (Float,Float,Float)
     -> [ForestSegment] -> IO PixelImage
 quadForestHighlightSegments forest image (c1,c2,c3) ss =
@@ -659,6 +682,17 @@ quadForestDrawImage useRegions useColors forest = do
       if r /= c'SUCCESS
          then error "Drawing forest image failed"
          else ptrToPixelImage fimg
+
+-- | Draws tree values over an existing image.
+--   TODO: maybe would be more flexible to use tree list instead of forest?
+quadForestDrawTrees :: Bool -> QuadForest -> PixelImage -> IO PixelImage
+quadForestDrawTrees useSegments forest image =
+  withForeignPtr (imagePtr image) $ \pimage ->
+    withForeignPtr (quadForestPtr forest) $ \pforest -> do
+      r <- c'quad_forest_draw_trees pforest pimage (cBool useSegments)
+      if r /= c'SUCCESS
+        then error $ "Drawing trees failed with " ++ (show r)
+        else ptrToPixelImage $ imagePtr image
 
 deep :: NFData a => a -> a
 deep a = deepseq a a
