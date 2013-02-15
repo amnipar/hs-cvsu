@@ -24,14 +24,27 @@ At the moment you need to get the c sources of cvsu into hs-cvsu directory
 (in sub-directory c):
 
 cd hs-cvsu
-git clone git@yousource.it.jyu.fi:cvsu/cvsu.git c
+git clone git@github.com:amnipar/cvsu.git c
 cabal-dev install
 
 You can also host the cvsu code in another path and use a symbolic link in the
-hs-cvsu folder.
+hs-cvsu folder:
 
-cv-cvsu library at
-git@github.com:amnipar/cv-cvsu.git
-Is useful for using this library with the CV library
+ch hs-cvsu
+ln -s /path/to/cvsu c
+
+Note:
+If you are using hs-cvsu together with the CV library
 git://github.com/aleator/CV.git
-which is a Haskell interface to OpenCV library.
+then you will need to get also the cv-cvsu library:
+git@github.com:amnipar/cv-cvsu.git
+which contains some utilities for combining CV with cvsu. For example, it will
+enable using the opencv library for opening any image files, converting the
+CV image types to cvsu PixelImage's, and using opencv drawing functions for
+visualizing various data structures.
+
+Many of the example applications rely on CV library at the moment. I will make
+the effort to provide later examples also without the CV requirement.The CV
+functionalities are separated from the basic hs-cvsu library to enable using it
+also without having to install opencv. This comes with the limitation that only
+pnm image files (.pbm/.pgm/.ppm) are supported.
