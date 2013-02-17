@@ -27,6 +27,7 @@ module CVSU.QuadForest
 , quadForestCreate
 , quadForestUpdate
 , quadForestRefresh
+, quadForestRefreshSegments
 , quadForestGetTopLevelTrees
 , quadForestGetTree
 , divideUntilConsistent
@@ -537,10 +538,15 @@ quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
       else quadForestRefresh forest
 
-quadForestSegmentByBoundaries :: QuadForest -> IO QuadForest
-quadForestSegmentByBoundaries forest =
+quadForestSegmentByBoundaries :: Int -> Double -> Double -> Double -> Double -> QuadForest -> IO QuadForest
+quadForestSegmentByBoundaries rounds highBias lowFactor treeAlpha segmentAlpha forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_segment_with_boundaries pforest
+        (fromIntegral rounds)
+        (realToFrac highBias)
+        (realToFrac lowFactor)
+        (realToFrac treeAlpha)
+        (realToFrac segmentAlpha)
     if r /= c'SUCCESS
       then error $ "Segment by boundaries failed with " ++ (show r)
       else quadForestRefresh forest

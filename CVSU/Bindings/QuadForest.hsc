@@ -184,4 +184,5 @@ import Foreign.ForeignPtr
   -> CDouble -> <direction> -> CULong -> CDouble -> <direction> -> <direction> \
   -> IO <result>
 
-#ccall quad_forest_segment_with_boundaries , Ptr <quad_forest> -> IO <result>
+#ccall quad_forest_segment_with_boundaries , Ptr <quad_forest> -> CULong \
+  -> CDouble -> CDouble -> CDouble -> CDouble -> IO <result>
