@@ -538,8 +538,8 @@ quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
       else quadForestRefresh forest
 
-quadForestSegmentByBoundaries :: Int -> Double -> Double -> Double -> Double -> QuadForest -> IO QuadForest
-quadForestSegmentByBoundaries rounds highBias lowFactor treeAlpha segmentAlpha forest =
+quadForestSegmentByBoundaries :: Int -> Double -> Double -> Double -> Double -> Bool -> Bool -> QuadForest -> IO QuadForest
+quadForestSegmentByBoundaries rounds highBias lowFactor treeAlpha segmentAlpha useHysteresis usePruning forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_segment_with_boundaries pforest
         (fromIntegral rounds)
@@ -547,6 +547,8 @@ quadForestSegmentByBoundaries rounds highBias lowFactor treeAlpha segmentAlpha f
         (realToFrac lowFactor)
         (realToFrac treeAlpha)
         (realToFrac segmentAlpha)
+        (cBool useHysteresis)
+        (cBool usePruning)
     if r /= c'SUCCESS
       then error $ "Segment by boundaries failed with " ++ (show r)
       else quadForestRefresh forest
