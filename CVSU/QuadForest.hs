@@ -39,6 +39,7 @@ module CVSU.QuadForest
 , quadForestFindBoundaries
 , quadForestSegmentEdges
 , quadForestGetSegments
+, quadForestGetBoundaries
 , quadForestGetSegmentTrees
 , quadForestGetSegmentMask
 , quadForestGetSegmentBoundary
@@ -122,7 +123,7 @@ data ForestEdge =
   , edgeDir :: Direction
   } deriving Eq
 
-hForestEdge (C'quad_forest_edge p _ dx dy mag ang mean dev has_edge dir) =
+hForestEdge (C'quad_forest_edge p _ _ _ _ _ _ dx dy mag ang mean dev has_edge _ dir) =
   ForestEdge
     p
     (realToFrac dx)
@@ -247,7 +248,7 @@ quadTreeNeighbors tree = do
     r <- c'quad_tree_get_neighbors plist (quadTreePtr tree)
     if r /= c'SUCCESS
       then error $ "Getting tree neighbors failed with " ++ (show r)
-      else createList flist quadTreeFromListItem
+      else createList plist quadTreeFromListItem
 
 quadTreeEdgeResponse :: QuadForest -> QuadTree -> IO (Double,Double)
 quadTreeEdgeResponse f t =
@@ -613,7 +614,39 @@ quadForestGetSegmentTrees forest ss = do -- 14 x 29
             (fromIntegral $ length ss)
         if r /= c'SUCCESS
            then error $ "Getting segment trees failed with " ++ (show r)
-           else createList flist quadTreeFromListItem
+           else createList plist quadTreeFromListItem
+
+
+
+-- | Creates an image tree from a list item by casting and converting
+edgeChainFromListItem :: Ptr C'list_item -> IO (Ptr C'quad_forest_edge_chain)
+edgeChainFromListItem pitem = do
+  item <- peek pitem
+  return $ castPtr $ c'list_item'data item
+  --return $ c'quad_forest_edge_chain'first edgechain
+
+createEdgeChain :: Ptr C'quad_forest_edge_chain -> IO [((Int,Int),(Int,Int))]
+createEdgeChain pchain = do
+  flist <- allocList
+  withForeignPtr flist $ \plist -> do
+    r <- c'quad_forest_get_edge_chain pchain plist
+    if r /= c'SUCCESS
+      then error $ "Getting edge chain failed with " ++ (show r)
+      else createList plist lineFromListItem
+{-
+IO [ForestEdge]
+createEdgeChain nullPtr = return []
+createEdgeChain pedge = do
+  edge <- peek pedge
+  --next <- peek $ p'quad_forest_edge'next pedge
+  liftM ((:) (hForestEdge edge)) (createEdgeChain $ c'quad_forest_edge'next edge)
+  -}
+
+quadForestGetBoundaries :: QuadForest -> IO [[((Int,Int),(Int,Int))]]
+quadForestGetBoundaries forest = do
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    l <- createList (p'quad_forest'edges pforest) edgeChainFromListItem
+    mapM createEdgeChain l
 
 forestSegmentNeighbors :: QuadForest -> [ForestSegment] -> IO [ForestSegment]
 forestSegmentNeighbors forest ss = do
@@ -625,7 +658,7 @@ forestSegmentNeighbors forest ss = do
             (fromIntegral $ length ss)
         if r /= c'SUCCESS
            then error $ "Getting segment neighbors failed with " ++ (show r)
-           else createList flist forestSegmentFromListItem
+           else createList plist forestSegmentFromListItem
 
 -- | Creates a bitmask from a collection of segments. The result will be an
 --   image with the same dimensions as the minimum covering rectangle of the
@@ -655,7 +688,7 @@ quadForestGetSegmentBoundary forest segment = do
           (segmentPtr segment) plist
       if r /= c'SUCCESS
         then error $ "Getting segment boundary failed with " ++ (show r)
-        else createList flist lineFromListItem
+        else createList plist lineFromListItem
 
 quadForestHighlightSegments :: QuadForest -> PixelImage -> (Float,Float,Float)
     -> [ForestSegment] -> IO PixelImage

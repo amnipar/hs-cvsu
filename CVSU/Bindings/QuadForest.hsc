@@ -33,16 +33,29 @@ import Foreign.ForeignPtr
 #stoptype
 
 #starttype quad_forest_edge
-#field parent    , Ptr <quad_forest_edge>
-#field rank      , CULong
-#field dx        , CDouble
-#field dy        , CDouble
-#field mag       , CDouble
-#field ang       , CDouble
-#field mean      , CDouble
-#field deviation , CDouble
-#field has_edge  , <truth_value>
-#field dir       , <direction>
+#field parent          , Ptr <quad_forest_edge>
+#field prev            , Ptr <quad_forest_edge>
+#field next            , Ptr <quad_forest_edge>
+#field tree            , Ptr ()
+#field length          , CULong
+#field rank            , CULong
+#field strength        , CDouble
+#field dx              , CDouble
+#field dy              , CDouble
+#field mag             , CDouble
+#field ang             , CDouble
+#field mean            , CDouble
+#field deviation       , CDouble
+#field has_edge        , <truth_value>
+#field is_intersection , <truth_value>
+#field dir             , <direction>
+#stoptype
+
+#starttype quad_forest_edge_chain
+#field parent , Ptr <quad_forest_edge>
+#field first  , Ptr <quad_forest_edge>
+#field last   , Ptr <quad_forest_edge>
+#field length , CULong
 #stoptype
 
 #starttype quad_tree
@@ -81,6 +94,7 @@ import Foreign.ForeignPtr
 #field dx              , CULong
 #field dy              , CULong
 #field trees           , <list>
+#field edges           , <list>
 #field last_root_tree  , Ptr <list_item>
 #field roots           , Ptr (Ptr <quad_tree>)
 #stoptype
@@ -167,6 +181,9 @@ import Foreign.ForeignPtr
 
 #ccall quad_forest_get_segment_boundary , Ptr <quad_forest> \
   -> Ptr <quad_forest_segment> -> Ptr <list> -> IO <result>
+
+#ccall quad_forest_get_edge_chain , Ptr <quad_forest_edge_chain> -> Ptr <list> \
+  -> IO <result>
 
 #ccall quad_forest_highlight_segments , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> Ptr CUChar -> IO <result>

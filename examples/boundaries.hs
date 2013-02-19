@@ -32,4 +32,6 @@ main = do
   pimg <- toPixelImage $ unsafeImageTo8Bit $ img
   forest <- quadForestCreate maxSize minSize pimg
   sforest <- quadForestFindBoundaries drounds bias forest
-  saveImage targetFile $ drawBoundaries True (0,1,1) 2 (quadForestTrees sforest) $ grayToRGB img
+  bs <- quadForestGetBoundaries sforest
+  saveImage targetFile $ drawLines (0,1,1) 2 (concat bs) $ grayToRGB img
+  --saveImage targetFile $ drawBoundaries True (0,1,1) 2 (quadForestTrees sforest) $ grayToRGB img
