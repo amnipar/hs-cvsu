@@ -41,22 +41,20 @@ listLast :: Ptr C'list -> IO (Ptr C'list_item)
 listLast plist =
   return $ p'list'last plist
 
-createList :: ForeignPtr C'list -> (Ptr C'list_item -> IO a) -> IO [a]
-createList flist op =
-  withForeignPtr flist $ \plist ->
-    if plist == nullPtr
-      then return []
-      else do
-        l <- listLast plist
-        f <- listFirst plist
-        ls <- recurseList op l f
-        --ls `seq` return ls
-        return $! ls
-  where
-    recurseList op l i
-      | l == i = return []
-      | otherwise = do
-        n <- listNext i
-        xs <- recurseList op l n
-        x <- op i
-        x `seq` xs `seq` return $! x:xs -- liftM (:) (f i) (recurseList l f n) ??
+createList :: Ptr C'list -> (Ptr C'list_item -> IO a) -> IO [a]
+createList plist op 
+  | plist == nullPtr = return []
+  | otherwise = do
+    l <- listLast plist
+    f <- listFirst plist
+    ls <- recurseList op l f
+    --ls `seq` return ls
+    return $! ls
+    where
+      recurseList op l i
+        | l == i = return []
+        | otherwise = do
+          n <- listNext i
+          xs <- recurseList op l n
+          x <- op i
+          x `seq` xs `seq` return $! x:xs -- liftM (:) (f i) (recurseList l f n) ??
