@@ -47,6 +47,8 @@ module CVSU.QuadForest
 , quadForestDrawImage
 , quadForestDrawTrees
 , mapDeep
+, createEdgeChain
+, getPathSniffers
 ) where
 
 import CVSU.Bindings.Types
@@ -123,7 +125,7 @@ data ForestEdge =
   , edgeDir :: Direction
   } deriving Eq
 
-hForestEdge (C'quad_forest_edge p _ _ _ _ _ _ dx dy mag ang mean dev has_edge _ dir) =
+hForestEdge (C'quad_forest_edge _ p _ _ _ _ _ _ dx dy mag ang mean dev has_edge _ dir) =
   ForestEdge
     p
     (realToFrac dx)
@@ -174,7 +176,7 @@ quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
 quadTreeFromPtr ptree
   | ptree == nullPtr = return EmptyQuadTree
   | otherwise        = do
-    (C'quad_tree x y s l stat seg edge _ nw ne sw se _ _ _ _ _ _ _ _) <- peek ptree
+    (C'quad_tree x y s l stat seg edge _ _ _ nw ne sw se _ _ _ _ _ _ _ _ _) <- peek ptree
     tnw <- quadTreeFromPtr nw
     tne <- quadTreeFromPtr ne
     tsw <- quadTreeFromPtr sw
@@ -565,12 +567,13 @@ quadForestFindEdges rounds bias dir forest =
       then error $ "quadForestFindEdges failed with " ++ (show r)
       else quadForestRefresh forest
 
-quadForestFindBoundaries :: Int -> Double -> QuadForest -> IO QuadForest
-quadForestFindBoundaries rounds bias forest =
+quadForestFindBoundaries :: Int -> Double -> Int -> QuadForest -> IO QuadForest
+quadForestFindBoundaries rounds bias minLength forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     r <- c'quad_forest_find_boundaries pforest
         (fromIntegral rounds)
         (realToFrac bias)
+        (fromIntegral minLength)
     if r /= c'SUCCESS
       then error $ "quadForestFindBoundaries failed with " ++ (show r)
       else quadForestRefresh forest
@@ -633,6 +636,17 @@ createEdgeChain pchain = do
     if r /= c'SUCCESS
       then error $ "Getting edge chain failed with " ++ (show r)
       else createList plist lineFromListItem
+
+getPathSniffers :: QuadForest -> IO [((Int,Int),(Int,Int))]
+getPathSniffers forest = do
+  flist <- allocList
+  withForeignPtr flist $ \plist ->
+    withForeignPtr (quadForestPtr forest) $ \pforest -> do
+      r <- c'quad_forest_get_path_sniffers pforest plist
+      if r /= c'SUCCESS
+        then error $ "Getting path sniffers failed with " ++ (show r)
+        else createList plist lineFromListItem
+
 {-
 IO [ForestEdge]
 createEdgeChain nullPtr = return []

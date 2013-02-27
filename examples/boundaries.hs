@@ -27,11 +27,14 @@ import ReadArgs
 -- Example: edges 8 4 h 3 0.8 1 1 False source.png target.png
 
 main = do
-  (maxSize, minSize, drounds, bias, sourceFile, targetFile) <- readArgs
+  (maxSize, minSize, drounds, bias, minLength, sourceFile, targetFile) <- readArgs
   img <- expectFloatGrey =<< readFromFile sourceFile
   pimg <- toPixelImage $ unsafeImageTo8Bit $ img
   forest <- quadForestCreate maxSize minSize pimg
-  sforest <- quadForestFindBoundaries drounds bias forest
+  sforest <- quadForestFindBoundaries drounds bias minLength forest
   bs <- quadForestGetBoundaries sforest
-  saveImage targetFile $ drawLines (0,1,1) 2 (concat bs) $ grayToRGB img
+  ps <- getPathSniffers sforest
+  saveImage targetFile $ 
+    drawLines (0,0,1) 1 ps $
+    drawLines (0,1,1) 2 (concat bs) $ grayToRGB img
   --saveImage targetFile $ drawBoundaries True (0,1,1) 2 (quadForestTrees sforest) $ grayToRGB img

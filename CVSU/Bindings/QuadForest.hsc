@@ -33,6 +33,7 @@ import Foreign.ForeignPtr
 #stoptype
 
 #starttype quad_forest_edge
+#field chain           , Ptr <quad_forest_edge_chain>
 #field parent          , Ptr <quad_forest_edge>
 #field prev            , Ptr <quad_forest_edge>
 #field next            , Ptr <quad_forest_edge>
@@ -56,6 +57,23 @@ import Foreign.ForeignPtr
 #field first  , Ptr <quad_forest_edge>
 #field last   , Ptr <quad_forest_edge>
 #field length , CULong
+#field cost   , CDouble
+#stoptype
+
+#starttype quad_forest_intersection
+#field tree   , Ptr <quad_tree>
+#field edges  , <list>
+#field chains , <list>
+#stoptype
+
+#starttype parse_context
+#field token , CULong
+#field round , CULong
+#field data  , <typed_pointer>
+#stoptype
+
+#starttype tree_annotation
+#field data , <typed_pointer>
 #stoptype
 
 #starttype quad_tree
@@ -66,6 +84,8 @@ import Foreign.ForeignPtr
 #field stat        , <statistics>
 #field segment     , <quad_forest_segment>
 #field edge        , <quad_forest_edge>
+#field intersection , <quad_forest_intersection>
+#field annotation  , <tree_annotation>
 #field parent      , Ptr <quad_tree>
 #field nw          , Ptr <quad_tree>
 #field ne          , Ptr <quad_tree>
@@ -79,6 +99,7 @@ import Foreign.ForeignPtr
 #field pool2       , CDouble
 #field acc         , CDouble
 #field acc2        , CDouble
+#field context     , <parse_context>
 #stoptype
 
 #starttype quad_forest
@@ -185,6 +206,9 @@ import Foreign.ForeignPtr
 #ccall quad_forest_get_edge_chain , Ptr <quad_forest_edge_chain> -> Ptr <list> \
   -> IO <result>
 
+#ccall quad_forest_get_path_sniffers , Ptr <quad_forest> -> Ptr <list> \
+  -> IO <result>
+
 #ccall quad_forest_highlight_segments , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> Ptr CUChar -> IO <result>
 
@@ -195,7 +219,7 @@ import Foreign.ForeignPtr
   -> <direction> -> IO <result>
 
 #ccall quad_forest_find_boundaries , Ptr <quad_forest> -> CULong -> CDouble \
-  -> IO <result>
+  -> CULong -> IO <result>
 
 #ccall quad_forest_segment_edges , Ptr <quad_forest> -> CULong \
   -> CDouble -> <direction> -> CULong -> CDouble -> <direction> -> <direction> \

@@ -29,6 +29,38 @@ import Foreign.Ptr
 #num d_N4
 #num d_N8
 
+-- type_label type and enum values
+
+#integral_t type_label
+
+#num t_UNDEF
+#num t_TYPE
+#num t_TRUTH
+#num t_POINTER
+#num t_TPOINTER
+#num t_STRING
+#num t_S8
+#num t_U8
+#num t_S16
+#num t_U16
+#num t_S32
+#num t_U32
+#num t_S64
+#num t_U64
+#num t_F32
+#num t_F64
+#num t_SEGMENT
+#num t_BOUNDARY
+#num t_INTERSECTION
+#num t_STAT_ACCUMULATOR
+#num t_PATH_SNIFFER
+
+#starttype typed_pointer
+#field type  , <type_label>
+#field count , CULong
+#field value , Ptr ()
+#stoptype
+
 -- result type and enum values
 
 #integral_t result
