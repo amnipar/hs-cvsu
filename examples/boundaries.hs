@@ -34,7 +34,7 @@ main = do
   sforest <- quadForestFindBoundaries drounds bias minLength forest
   bs <- quadForestGetBoundaries sforest
   ps <- getPathSniffers sforest
-  saveImage targetFile $ 
+  saveImage targetFile $
     drawLines (0,0,1) 1 ps $
     drawLines (0,1,1) 2 (concat bs) $ grayToRGB img
   --saveImage targetFile $ drawBoundaries True (0,1,1) 2 (quadForestTrees sforest) $ grayToRGB img
