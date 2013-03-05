@@ -7,7 +7,11 @@ module CVSU.Types
 , Direction(..)
 , hDirection
 , cDirection
+, hPoint
+, hLine
+, hWeightedLine
 , lineFromListItem
+, weightedLineFromListItem
 ) where
 
 import CVSU.Bindings.Types
@@ -111,8 +115,18 @@ hPoint (C'point x y) = (fromIntegral x, fromIntegral y)
 hLine :: C'line -> ((Int,Int),(Int,Int))
 hLine (C'line start end) = (hPoint start, hPoint end)
 
+hWeightedLine :: C'weighted_line -> (((Int,Int),(Int,Int)),Double)
+hWeightedLine (C'weighted_line start end weight) =
+  ((hPoint start, hPoint end), realToFrac weight)
+
 lineFromListItem :: Ptr C'list_item -> IO ((Int,Int),(Int,Int))
 lineFromListItem pitem = do
   item <- peek pitem
   line <- peek $ castPtr $ c'list_item'data item
   return $ hLine line
+
+weightedLineFromListItem :: Ptr C'list_item -> IO (((Int,Int),(Int,Int)),Double)
+weightedLineFromListItem pitem = do
+  item <- peek pitem
+  line <- peek $ castPtr $ c'list_item'data item
+  return $ hWeightedLine line

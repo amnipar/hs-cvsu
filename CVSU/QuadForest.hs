@@ -37,6 +37,7 @@ module CVSU.QuadForest
 , quadForestSegmentByBoundaries
 , quadForestFindEdges
 , quadForestFindBoundaries
+, quadForestParse
 , quadForestSegmentEdges
 , quadForestGetSegments
 , quadForestGetBoundaries
@@ -49,6 +50,7 @@ module CVSU.QuadForest
 , mapDeep
 , createEdgeChain
 , getPathSniffers
+, getForestLinks
 ) where
 
 import CVSU.Bindings.Types
@@ -176,7 +178,7 @@ quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
 quadTreeFromPtr ptree
   | ptree == nullPtr = return EmptyQuadTree
   | otherwise        = do
-    (C'quad_tree x y s l stat seg edge _ _ _ nw ne sw se _ _ _ _ _ _ _ _ _) <- peek ptree
+    (C'quad_tree x y s l stat seg edge _ _ _ nw ne sw se _ _ _ _ _ _ _ _ _ _) <- peek ptree
     tnw <- quadTreeFromPtr nw
     tne <- quadTreeFromPtr ne
     tsw <- quadTreeFromPtr sw
@@ -578,6 +580,17 @@ quadForestFindBoundaries rounds bias minLength forest =
       then error $ "quadForestFindBoundaries failed with " ++ (show r)
       else quadForestRefresh forest
 
+quadForestParse :: Int -> Double -> Int -> QuadForest -> IO QuadForest
+quadForestParse rounds bias minLength forest =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_parse pforest
+        (fromIntegral rounds)
+        (realToFrac bias)
+        (fromIntegral minLength)
+    if r /= c'SUCCESS
+      then error $ "quadForestParse failed with " ++ (show r)
+      else quadForestRefresh forest
+
 quadForestSegmentEdges :: Int -> Double -> Direction -> Int -> Double
       -> Direction -> Direction -> QuadForest -> IO QuadForest
 quadForestSegmentEdges detectRounds detectBias detectDir propRounds
@@ -646,6 +659,16 @@ getPathSniffers forest = do
       if r /= c'SUCCESS
         then error $ "Getting path sniffers failed with " ++ (show r)
         else createList plist lineFromListItem
+
+getForestLinks :: QuadForest -> IO [(((Int,Int),(Int,Int)),Double)]
+getForestLinks forest = do
+  flist <- allocList
+  withForeignPtr flist $ \plist ->
+    withForeignPtr (quadForestPtr forest) $ \pforest -> do
+      r <- c'quad_forest_get_links pforest plist
+      if r /= c'SUCCESS
+        then error $ "Getting links failed with " ++ (show r)
+        else createList plist weightedLineFromListItem
 
 {-
 IO [ForestEdge]

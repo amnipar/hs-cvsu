@@ -134,6 +134,14 @@ import Foreign.Ptr
 #field end , <point>
 #stoptype
 
+-- weighted line type
+
+#starttype weighted_line
+#field start  , <point>
+#field end    , <point>
+#field weight , CDouble
+#stoptype
+
 --rect type
 
 #starttype rect

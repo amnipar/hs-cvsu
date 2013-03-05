@@ -99,6 +99,7 @@ import Foreign.ForeignPtr
 #field pool2       , CDouble
 #field acc         , CDouble
 #field acc2        , CDouble
+#field links       , <list>
 #field context     , <parse_context>
 #stoptype
 
@@ -116,6 +117,7 @@ import Foreign.ForeignPtr
 #field dy              , CULong
 #field trees           , <list>
 #field edges           , <list>
+#field links           , <list>
 #field last_root_tree  , Ptr <list_item>
 #field roots           , Ptr (Ptr <quad_tree>)
 #stoptype
@@ -209,6 +211,8 @@ import Foreign.ForeignPtr
 #ccall quad_forest_get_path_sniffers , Ptr <quad_forest> -> Ptr <list> \
   -> IO <result>
 
+#ccall quad_forest_get_links , Ptr <quad_forest> -> Ptr <list> -> IO <result>
+
 #ccall quad_forest_highlight_segments , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> Ptr CUChar -> IO <result>
 
@@ -228,3 +232,6 @@ import Foreign.ForeignPtr
 #ccall quad_forest_segment_with_boundaries , Ptr <quad_forest> -> CULong \
   -> CDouble -> CDouble -> CDouble -> CDouble -> <truth_value> \
   -> <truth_value> -> IO <result>
+
+#ccall quad_forest_parse , Ptr <quad_forest> -> CULong -> CDouble \
+  -> CULong -> IO <result>
