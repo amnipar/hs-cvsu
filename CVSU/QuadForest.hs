@@ -4,6 +4,7 @@ module CVSU.QuadForest
 ( QuadTree(..)
 , QuadForest(..)
 , ForestSegment(..)
+, forestSegmentFromPtr
 , forestSegmentUnion
 , forestSegmentNeighbors
 , ForestEdge(..)

@@ -26,6 +26,7 @@ Library
     CVSU.Integral
     CVSU.Edges
     CVSU.QuadForest
+    CVSU.TemporalForest
     CVSU.Moments
   Other-Modules:
     CVSU.Bindings.Types
@@ -35,6 +36,7 @@ Library
     CVSU.Bindings.Integral
     CVSU.Bindings.Edges
     CVSU.Bindings.QuadForest
+    CVSU.Bindings.TemporalForest
   Extensions:
     ForeignFunctionInterface
   Build-Depends:
@@ -60,7 +62,9 @@ Library
     c/cvsu_filter.h,
     c/cvsu_integral.h,
     c/cvsu_edges.h,
-    c/cvsu_quad_forest.h
+    c/cvsu_quad_forest.h,
+    c/cvsu_background_forest.h,
+    c/cvsu_temporal_forest.h
   Install-includes:
     c/cvsu_config.h,
     c/cvsu_macros.h,
@@ -73,7 +77,9 @@ Library
     c/cvsu_filter.h,
     c/cvsu_integral.h,
     c/cvsu_edges.h,
-    c/cvsu_quad_forest.h
+    c/cvsu_quad_forest.h,
+    c/cvsu_background_forest.h,
+    c/cvsu_temporal_forest.h
   C-sources:
     c/cvsu_memory.c,
     c/cvsu_output.c,
@@ -84,7 +90,9 @@ Library
     c/cvsu_filter.c,
     c/cvsu_integral.c,
     c/cvsu_edges.c,
-    c/cvsu_quad_forest.c
+    c/cvsu_quad_forest.c,
+    c/cvsu_background_forest.c,
+    c/cvsu_temporal_forest.c
 
 source-repository head
   type:     git
