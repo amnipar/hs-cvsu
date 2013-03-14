@@ -25,8 +25,11 @@ Library
     CVSU.ConnectedComponents
     CVSU.Integral
     CVSU.Edges
+    CVSU.QuadTree
     CVSU.QuadForest
     CVSU.TemporalForest
+    CVSU.Segmentation
+    CVSU.Parsing
     CVSU.Moments
   Other-Modules:
     CVSU.Bindings.Types
@@ -35,8 +38,14 @@ Library
     CVSU.Bindings.ConnectedComponents
     CVSU.Bindings.Integral
     CVSU.Bindings.Edges
+    CVSU.Bindings.Context
+    CVSU.Bindings.Annotation
+    CVSU.Bindings.QuadTree
     CVSU.Bindings.QuadForest
+    CVSU.Bindings.BackgroundForest
     CVSU.Bindings.TemporalForest
+    CVSU.Bindings.Segmentation
+    CVSU.Bindings.Parsing
   Extensions:
     ForeignFunctionInterface
   Build-Depends:
@@ -62,9 +71,14 @@ Library
     c/cvsu_filter.h,
     c/cvsu_integral.h,
     c/cvsu_edges.h,
+    c/cvsu_context.h,
+    c/cvsu_annotation.h,
+    c/cvsu_quad_tree.h,
     c/cvsu_quad_forest.h,
     c/cvsu_background_forest.h,
-    c/cvsu_temporal_forest.h
+    c/cvsu_temporal_forest.h,
+    c/cvsu_segmentation.h,
+    c/cvsu_parsing.h
   Install-includes:
     c/cvsu_config.h,
     c/cvsu_macros.h,
@@ -77,9 +91,14 @@ Library
     c/cvsu_filter.h,
     c/cvsu_integral.h,
     c/cvsu_edges.h,
+    c/cvsu_context.h,
+    c/cvsu_annotation.h,
+    c/cvsu_quad_tree.h,
     c/cvsu_quad_forest.h,
     c/cvsu_background_forest.h,
-    c/cvsu_temporal_forest.h
+    c/cvsu_temporal_forest.h,
+    c/cvsu_segmentation.h,
+    c/cvsu_parsing.h
   C-sources:
     c/cvsu_memory.c,
     c/cvsu_output.c,
@@ -90,9 +109,14 @@ Library
     c/cvsu_filter.c,
     c/cvsu_integral.c,
     c/cvsu_edges.c,
+    c/cvsu_context.c,
+    c/cvsu_annotation.c,
+    c/cvsu_quad_tree.c,
     c/cvsu_quad_forest.c,
     c/cvsu_background_forest.c,
-    c/cvsu_temporal_forest.c
+    c/cvsu_temporal_forest.c,
+    c/cvsu_segmentation.c,
+    c/cvsu_parsing.c
 
 source-repository head
   type:     git
