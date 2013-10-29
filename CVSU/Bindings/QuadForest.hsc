@@ -28,19 +28,11 @@ import Foreign.ForeignPtr
 #field tree_min_size   , CULong
 #field dx              , CULong
 #field dy              , CULong
+#field token           , CULong
 #field trees           , <list>
-#field edges           , <list>
 #field links           , <list>
 #field last_root_tree  , Ptr <list_item>
 #field roots           , Ptr (Ptr <quad_tree>)
-#stoptype
-
-#starttype quad_forest_edge_chain
-#field parent , Ptr <quad_forest_edge>
-#field first  , Ptr <quad_forest_edge>
-#field last   , Ptr <quad_forest_edge>
-#field length , CULong
-#field cost   , CDouble
 #stoptype
 
 #ccall quad_forest_alloc , IO (Ptr <quad_forest>)
@@ -53,13 +45,19 @@ import Foreign.ForeignPtr
 #ccall quad_forest_reload , Ptr <quad_forest> ->  CULong -> CULong \
   -> IO <result>
 
-#ccall quad_forest_refresh_segments , Ptr <quad_forest> -> IO <result>
-
 #ccall quad_forest_destroy , Ptr <quad_forest> -> IO <result>
 
 #ccall quad_forest_nullify , Ptr <quad_forest> -> IO <result>
 
 #ccall quad_forest_is_null , Ptr <quad_forest> -> IO <truth_value>
+
+#ccall quad_forest_set_init , Ptr <quad_forest> -> IO ()
+
+#ccall quad_forest_set_update , Ptr <quad_forest> -> IO ()
+
+#ccall quad_forest_set_parse , Ptr <quad_forest> -> IO ()
+
+#ccall quad_forest_has_parse , Ptr <quad_forest> -> IO <truth_value>
 
 #ccall quad_forest_update , Ptr <quad_forest> -> IO <result>
 
@@ -72,31 +70,31 @@ import Foreign.ForeignPtr
 #ccall quad_forest_get_segment_neighbors , Ptr <list> -> Ptr <quad_forest> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> IO <result>
 
-#ccall quad_forest_draw_trees , Ptr <quad_forest> -> Ptr <pixel_image> \
-  -> <truth_value> -> IO <result>
-
 #ccall quad_forest_get_segment_mask , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> Ptr (Ptr <quad_forest_segment>) -> CULong -> <truth_value> -> IO <result>
 
 #ccall quad_forest_get_segment_boundary , Ptr <quad_forest> \
   -> Ptr <quad_forest_segment> -> Ptr <list> -> IO <result>
 
-#ccall quad_forest_get_edge_chain , Ptr <quad_forest_edge_chain> -> Ptr <list> \
-  -> IO <result>
-
-#ccall quad_forest_get_path_sniffers , Ptr <quad_forest> -> Ptr <list> \
-  -> IO <result>
-
-#ccall quad_forest_get_links , Ptr <quad_forest> -> Ptr <list> -> IO <result>
+#ccall quad_forest_get_links , Ptr <quad_forest> -> Ptr <list> \
+  -> <link_visualization_mode> -> IO <result>
 
 #ccall quad_forest_highlight_segments , Ptr <quad_forest> -> Ptr <pixel_image> \
-  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> Ptr CUChar -> IO <result>
+  -> Ptr (Ptr <segment>) -> CULong -> Ptr CUChar -> IO <result>
 
 #ccall quad_forest_draw_image , Ptr <quad_forest> -> Ptr <pixel_image> \
   -> <truth_value> -> <truth_value> -> IO <result>
+
+#ccall quad_forest_draw_trees , Ptr <quad_forest> -> Ptr <pixel_image> \
+  -> <truth_value> -> IO <result>
 
 #ccall quad_forest_find_edges , Ptr <quad_forest> -> CULong -> CDouble \
   -> <direction> -> IO <result>
 
 #ccall quad_forest_find_boundaries , Ptr <quad_forest> -> CULong -> CDouble \
   -> CULong -> IO <result>
+
+#ccall quad_forest_find_boundaries_with_hysteresis , Ptr <quad_forest> \
+  -> CULong -> CDouble -> CDouble -> IO <result>
+
+#ccall quad_forest_prune_boundaries , Ptr <quad_forest> -> IO <result>

@@ -6,9 +6,40 @@ module CVSU.Bindings.QuadTree where
 #strict_import
 
 import CVSU.Bindings.Types
-
+import CVSU.Bindings.Annotation
 import Foreign.Ptr
 
+#starttype quad_tree_link_head
+#field link       , <quad_tree_link>
+#field opposite   , <quad_tree_link_head>
+#field other      , <quad_tree_link_head>
+#field tree       , <quad_tree>
+#field angle      , CDouble
+#field annotation , <typed_pointer>
+#stoptype
+
+#starttype quad_tree_link
+#field a          , <quad_tree_link_head>
+#field b          , <quad_tree_link_head>
+#field category   , <direction>
+#field distance   , CDouble
+#field annotation , <typed_pointer>
+#stoptype
+
+#ccall quad_tree_link_destroy , <quad_tree_link> -> IO ()
+
+#integral_t link_visualization_mode
+#num v_LINK_NONE
+#num v_LINK_DISTANCE
+#num v_LINK_ANGLE_COST
+#num v_LINK_SIMILARITY
+#num v_LINK_MEASURE
+#num v_LINK_STRENGTH
+#num v_LINK_STRAIGHTNESS
+#num v_LINK_EDGE
+#num v_LINK_STRAIGHT
+#num v_LINK_EDGE_POS
+#num v_LINK_BOUNDARY
 
 #starttype quad_tree
 #field x           , CULong
@@ -16,9 +47,6 @@ import Foreign.Ptr
 #field size        , CULong
 #field level       , CULong
 #field stat        , <statistics>
-#field segment     , <quad_forest_segment>
-#field edge        , <quad_forest_edge>
-#field intersection , <quad_forest_intersection>
 #field annotation  , <tree_annotation>
 #field parent      , Ptr <quad_tree>
 #field nw          , Ptr <quad_tree>
@@ -29,14 +57,12 @@ import Foreign.Ptr
 #field e           , Ptr <quad_tree>
 #field s           , Ptr <quad_tree>
 #field w           , Ptr <quad_tree>
-#field pool        , CDouble
-#field pool2       , CDouble
-#field acc         , CDouble
-#field acc2        , CDouble
 #field links       , <list>
-#field context     , <parse_context>
+#field context     , <typed_pointer>
+#field annotation  , <typed_pointer>
 #stoptype
 
+#ccall quad_tree_destroy , Ptr <quad_tree> -> IO ()
 
 #ccall quad_tree_nullify , Ptr <quad_tree> -> IO <result>
 
@@ -58,21 +84,21 @@ import Foreign.Ptr
 #ccall quad_tree_get_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
   -> Ptr CDouble -> Ptr CDouble -> IO <result>
 
+#ccall quad_tree_ensure_edge_response , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr (Ptr <edge_response>) -> <truth_value> -> IO <result>
+
 #ccall quad_tree_get_child_edge_response , Ptr <quad_forest> \
   -> Ptr <quad_tree> -> Ptr CDouble -> Ptr CDouble -> IO <result>
 
+#ccall quad_tree_edge_response_to_line , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr <list> -> IO <result>
+
+#ccall quad_tree_gradient_to_line , Ptr <quad_forest> -> Ptr <quad_tree> \
+  -> Ptr <list> -> IO <result>
+
 #ccall quad_tree_get_neighbors , Ptr <list> -> Ptr <quad_tree> -> IO <result>
 
-#ccall quad_tree_segment_create , Ptr <quad_tree> -> IO ()
+#ccall quad_tree_link_equals , Ptr () -> Ptr () -> IO <truth_value>
 
-#ccall quad_forest_segment_union , Ptr <quad_forest_segment> \
-  -> Ptr <quad_forest_segment> -> IO ()
-
-#ccall quad_tree_segment_union , Ptr <quad_tree> -> Ptr <quad_tree> -> IO ()
-
-#ccall quad_tree_segment_find , Ptr <quad_tree> \
-  -> IO (Ptr <quad_forest_segment>)
-
-#ccall quad_tree_segment_get , Ptr <quad_tree> -> IO CULong
-
-#ccall quad_tree_is_segment_parent , Ptr <quad_tree> -> IO <truth_value>
+#ccall quad_tree_find_link , Ptr <quad_tree> -> Ptr <quad_tree> \
+  -> Ptr (Ptr <quad_tree_link_head>) -> IO <result>
