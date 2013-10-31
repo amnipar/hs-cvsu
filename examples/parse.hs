@@ -27,15 +27,16 @@ import ReadArgs
 -- Example: edges 8 4 h 3 0.8 1 1 False source.png target.png
 
 main = do
-  (maxSize, minSize, drounds, bias, minLength, sourceFile, targetFile) <- readArgs
+  (maxSize, minSize, sourceFile, targetFile) <- readArgs
   img <- expectFloatGrey =<< readFromFile sourceFile
   pimg <- toPixelImage $ unsafeImageTo8Bit $ img
   forest <- quadForestCreate maxSize minSize pimg
-  pforest <- quadForestParse drounds bias minLength forest
+  pforest <- quadForestParse forest
   --bs <- quadForestGetBoundaries sforest
-  ls <- getForestLinks pforest
-  saveImage targetFile $
-    drawWeightedLines (0,1,1) 1 ls $
+  --ls <- getForestLinks pforest
+  --saveImage targetFile $
+  quadForestVisualizeParseResult pforest pimg >>= writePixelImage targetFile
+    --drawWeightedLines (0,1,1) 1 ls $
     --drawLines (0,1,1) 2 (concat bs) $
-    grayToRGB img
+    --grayToRGB img
   --saveImage targetFile $ drawBoundaries True (0,1,1) 2 (quadForestTrees sforest) $ grayToRGB img

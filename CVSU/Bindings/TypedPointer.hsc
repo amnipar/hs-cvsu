@@ -5,6 +5,8 @@ module CVSU.Bindings.TypedPointer where
 
 #strict_import
 
+import CVSU.Bindings.Types
+import Foreign.C.Types
 import Foreign.Ptr
 
 #integral_t type_label
@@ -41,7 +43,7 @@ import Foreign.Ptr
 #field type , <type_label>
 #field count , CULong
 #field token , CULong
-#field value , <pointer>
+#field value , Ptr ()
 #stoptype
 
 #ccall typed_pointer_create , Ptr <typed_pointer> -> <type_label> -> CULong
@@ -67,7 +69,7 @@ import Foreign.Ptr
   -> Ptr (Ptr <typed_pointer>) -> IO <result>
 
 #ccall tuple_has_type , Ptr <typed_pointer> -> <type_label> \
-  -> IO <typed_pointer>
+  -> IO (Ptr <typed_pointer>)
 
 #ccall is_tuple , Ptr <typed_pointer> -> <truth_value>
 

@@ -6,6 +6,12 @@ module CVSU.Segmentation
 , quadForestSegmentByBoundaries
 ) where
 
+import CVSU.Types
+import CVSU.QuadTree
+import CVSU.QuadForest
+
+import Control.DeepSeq
+
 -- | Goes through the listed trees, divides those that are inconsistent,
 --   discards those that would become too small if divided
 divideUntilConsistent :: (QuadTree -> Bool) -> QuadForest -> [QuadTree] -> IO [QuadTree]

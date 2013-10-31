@@ -6,9 +6,11 @@ module CVSU.Bindings.QuadForest where
 #strict_import
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.Annotation
 import CVSU.Bindings.PixelImage
 import CVSU.Bindings.Integral
 import CVSU.Bindings.List
+import CVSU.Bindings.QuadTree
 
 import Foreign.C.String
 import Foreign.Ptr
@@ -62,19 +64,19 @@ import Foreign.ForeignPtr
 #ccall quad_forest_update , Ptr <quad_forest> -> IO <result>
 
 #ccall quad_forest_get_segments , Ptr <quad_forest> \
-  -> Ptr (Ptr <quad_forest_segment>) -> IO <result>
+  -> Ptr (Ptr <segment>) -> IO <result>
 
 #ccall quad_forest_get_segment_trees , Ptr <list> -> Ptr <quad_forest> \
-  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> IO <result>
+  -> Ptr (Ptr <segment>) -> CULong -> IO <result>
 
 #ccall quad_forest_get_segment_neighbors , Ptr <list> -> Ptr <quad_forest> \
-  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> IO <result>
+  -> Ptr (Ptr <segment>) -> CULong -> IO <result>
 
 #ccall quad_forest_get_segment_mask , Ptr <quad_forest> -> Ptr <pixel_image> \
-  -> Ptr (Ptr <quad_forest_segment>) -> CULong -> <truth_value> -> IO <result>
+  -> Ptr (Ptr <segment>) -> CULong -> <truth_value> -> IO <result>
 
 #ccall quad_forest_get_segment_boundary , Ptr <quad_forest> \
-  -> Ptr <quad_forest_segment> -> Ptr <list> -> IO <result>
+  -> Ptr <segment> -> Ptr <list> -> IO <result>
 
 #ccall quad_forest_get_links , Ptr <quad_forest> -> Ptr <list> \
   -> <link_visualization_mode> -> IO <result>

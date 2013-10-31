@@ -6,12 +6,11 @@ module CVSU.Bindings.Annotation where
 #strict_import
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.TypedPointer
+import CVSU.Bindings.Context
+import CVSU.Bindings.QuadTree
 import Foreign.C.Types
 import Foreign.Ptr
-
-#starttype tree_annotation
-#field data , <typed_pointer>
-#stoptype
 
 -- accumulated stat type and related functions
 
@@ -23,17 +22,17 @@ import Foreign.Ptr
 #field strength , CDouble
 #stoptype
 
-#ccall accumulated_stat_create , Ptr <quad_tree> -> Ptr <stat_accumulator>
+#ccall accumulated_stat_create , Ptr <quad_tree> -> Ptr <stat_accumulator> \
   -> IO <result>
 
-#ccall ensure_accumulated_stat , Ptr <typed_pointer>
+#ccall ensure_accumulated_stat , Ptr <typed_pointer> \
   -> Ptr (Ptr <accumulated_stat>) -> IO <result>
 
 #ccall is_accumulated_stat , Ptr <typed_pointer> -> IO <truth_value>
 
 #ccall has_accumulated_stat , Ptr <typed_pointer> -> IO (Ptr <accumulated_stat>)
 
-#ccall expect_accumulated_stat , Ptr (Ptr <accumulated_stat>)
+#ccall expect_accumulated_stat , Ptr (Ptr <accumulated_stat>) \
   -> Ptr <typed_pointer> -> IO <result>
 
 -- node_category type
@@ -76,7 +75,7 @@ import Foreign.Ptr
 #ccall ensure_neighborhood_stat , Ptr <typed_pointer> \
   -> Ptr (Ptr <neighborhood_stat>) -> IO <result>
 
-#ccall is_neighborhood_stat , Ptr <typed_pointer> -> IO <truth_value> \
+#ccall is_neighborhood_stat , Ptr <typed_pointer> -> IO <truth_value>
 
 #ccall has_neighborhood_stat , Ptr <typed_pointer> \
   -> IO (Ptr <neighborhood_stat>)
@@ -132,7 +131,7 @@ import Foreign.Ptr
 #field perpendicular_score , CDouble
 #stoptype
 
-#ccall ensure_link_measure , Ptr <typed_pointer> -> Ptr (Ptr <link_measure>)
+#ccall ensure_link_measure , Ptr <typed_pointer> -> Ptr (Ptr <link_measure>) \
   -> CULong -> IO <result>
 
 #ccall is_link_measure , Ptr <typed_pointer> -> IO <truth_value>
@@ -151,7 +150,7 @@ import Foreign.Ptr
 #field dev_left , CDouble
 #field dev_right , CDouble
 #field mean_score , CDouble
-#field dev_score , Cdouble
+#field dev_score , CDouble
 #stoptype
 
 #ccall is_edge_profile , Ptr <typed_pointer> -> IO <truth_value>
@@ -183,7 +182,7 @@ import Foreign.Ptr
 #starttype boundary_message
 #field round , CULong
 #field pool_curvature , CULong
-#field acc_curvature , CUlong
+#field acc_curvature , CULong
 #field pool_distance , CULong
 #field acc_distance , CULong
 #field pool_length , CULong
@@ -303,7 +302,7 @@ import Foreign.Ptr
 
 #ccall has_boundary , Ptr <typed_pointer> -> CULong -> IO (Ptr <boundary)
 
-#ccall quad_tree_ensure_boundary , Ptr <quad_tree> -> Ptr (Ptr <boundary) \
+#ccall quad_tree_ensure_boundary , Ptr <quad_tree> -> Ptr (Ptr <boundary>) \
   -> IO <result>
 
 #ccall boundary_init , Ptr <boundary> -> Ptr <edge_links> -> IO ()

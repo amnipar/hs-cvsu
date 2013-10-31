@@ -6,6 +6,9 @@ module CVSU.Bindings.Parsing where
 #strict_import
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.PixelImage
+import CVSU.Bindings.QuadForest
+
 import Foreign.C.Types
 import Foreign.Ptr
 
