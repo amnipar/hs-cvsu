@@ -97,7 +97,7 @@ temporalForestGetSegments forest =
   withForeignPtr (temporalForestPtr forest) $ \pforest -> do
     targetSize <- liftM fromIntegral $ c'temporal_forest_segment_count pforest
     let
-      allocTargetArray :: Int -> IO (Ptr (Ptr C'quad_forest_segment))
+      allocTargetArray :: Int -> IO (Ptr (Ptr C'segment))
       allocTargetArray size = mallocArray size
     ptarget <- allocTargetArray targetSize
     c'temporal_forest_get_segments pforest ptarget

@@ -4,9 +4,9 @@ module CVSU.QuadForest
 ( QuadForest(..)
 , ForestSegment(..)
 , forestSegmentFromPtr
-, forestSegmentUnion
+--, forestSegmentUnion
 , forestSegmentNeighbors
-, ForestEdge(..)
+--, ForestEdge(..)
 , segmentLeft
 , segmentTop
 , segmentRight
@@ -15,15 +15,15 @@ module CVSU.QuadForest
 , quadForestCreate
 , quadForestUpdate
 , quadForestRefresh
-, quadForestRefreshSegments
+--, quadForestRefreshSegments
 , quadForestGetTopLevelTrees
 , quadForestGetTree
-, quadForestFindEdges
-, quadForestFindBoundaries
-, quadForestParse
-, quadForestSegmentEdges
+--, quadForestFindEdges
+--, quadForestFindBoundaries
+--, quadForestParse
+--, quadForestSegmentEdges
 , quadForestGetSegments
-, quadForestGetBoundaries
+--, quadForestGetBoundaries
 , quadForestGetSegmentTrees
 , quadForestGetSegmentMask
 , quadForestGetSegmentBoundary
@@ -31,9 +31,23 @@ module CVSU.QuadForest
 , quadForestDrawImage
 , quadForestDrawTrees
 , mapDeep
-, createEdgeChain
-, getPathSniffers
+--, createEdgeChain
+--, getPathSniffers
 , getForestLinks
+, QuadTree(..)
+--, quadTreeHasEdge
+--, quadTreeHasVEdge
+--, quadTreeHasHEdge
+, quadTreeChildStat
+, quadTreeNeighborhoodStat
+, quadTreeDivide
+, quadTreeNeighbors
+, quadTreeEdgeResponse
+, quadTreeChildEdgeResponse
+, quadTreeSegmentInit
+, quadTreeSegmentUnion
+, quadTreeSegmentFind
+, segmentUnion
 ) where
 
 import CVSU.Bindings.Types
@@ -64,7 +78,7 @@ import Debug.Trace
 
 data ForestSegment =
   ForestSegment
-  { segmentPtr :: Ptr C'quad_forest_segment
+  { segmentPtr :: Ptr C'segment
   , segmentX :: Int
   , segmentY :: Int
   , segmentW :: Int
@@ -81,8 +95,14 @@ segmentTop = segmentY
 segmentRight s = segmentX s + segmentW s
 segmentBottom s = segmentY s + segmentH s
 
-hForestSegment (C'quad_forest_segment p _ x1 y1 x2 y2 stat m d b c1 c2 c3) =
-  ForestSegment
+
+hForestSegment (C'segment p _ _ _ stat)
+--x1 y1 x2 y2 stat m d b c1 c2 c3) =
+  = ForestSegment p 0 0 0 0 (hStatistics stat) 0 0 False (toColor 0 0 0)
+  where
+    makeC = (/255).realToFrac
+    toColor c1 c2 c3 = (makeC c1, makeC c2, makeC c3)
+  {-
     p
     (fromIntegral x1)
     (fromIntegral y1)
@@ -93,13 +113,12 @@ hForestSegment (C'quad_forest_segment p _ x1 y1 x2 y2 stat m d b c1 c2 c3) =
     (realToFrac d)
     (hBool b)
     (toColor c1 c2 c3)
-  where
-    makeC = (/255).realToFrac
-    toColor c1 c2 c3 = (makeC c1, makeC c2, makeC c3)
+    -}
 
+{-
 data ForestEdge =
   ForestEdge
-  { edgePtr :: Ptr C'quad_forest_edge
+  { edgePtr :: Ptr C'boundary
   , edgeDX :: Double
   , edgeDY :: Double
   , edgeMag :: Double
@@ -110,7 +129,7 @@ data ForestEdge =
   , edgeDir :: Direction
   } deriving Eq
 
-hForestEdge (C'quad_forest_edge _ p _ _ _ _ _ _ dx dy mag ang mean dev has_edge _ dir) =
+hForestEdge (C'boundary p _ _ _ _ _ _ dx dy mag ang mean dev has_edge _ dir) =
   ForestEdge
     p
     (realToFrac dx)
@@ -121,8 +140,9 @@ hForestEdge (C'quad_forest_edge _ p _ _ _ _ _ _ dx dy mag ang mean dev has_edge 
     (realToFrac dev)
     (hBool has_edge)
     (hDirection dir)
+-}
 
-forestSegmentFromPtr :: Ptr C'quad_forest_segment -> IO ForestSegment
+forestSegmentFromPtr :: Ptr C'segment -> IO ForestSegment
 forestSegmentFromPtr psegment
   | psegment == nullPtr = error "null pointer in forestSegmentFromPtr"
   | otherwise = do
@@ -236,14 +256,6 @@ quadForestRefresh forest =
       (fromIntegral dy)
       ts
 
-quadForestRefreshSegments :: QuadForest -> IO QuadForest
-quadForestRefreshSegments forest = do
-  withForeignPtr (quadForestPtr forest) $ \pforest -> do
-    r <- c'quad_forest_refresh_segments pforest
-    if r /= c'SUCCESS
-      then error $ "Refresh segments failed with " ++ (show r)
-      else quadForestRefresh forest
-
 withQuadForest :: QuadForest -> (QuadForest -> IO a) -> IO a
 withQuadForest f op =
   withForeignPtr (quadForestPtr f) $ \_ -> do
@@ -272,7 +284,7 @@ quadForestGetTree f (x,y) =
     forest <- peek pforest
     root <- peek $ advancePtr (c'quad_forest'roots forest) (y * (quadForestCols f) + x)
     quadTreeFromPtr root
-
+{-
 quadForestFindEdges :: Int -> Double -> Direction -> QuadForest -> IO QuadForest
 quadForestFindEdges rounds bias dir forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
@@ -294,7 +306,8 @@ quadForestFindBoundaries rounds bias minLength forest =
     if r /= c'SUCCESS
       then error $ "quadForestFindBoundaries failed with " ++ (show r)
       else quadForestRefresh forest
-
+      -}
+{-
 quadForestSegmentEdges :: Int -> Double -> Direction -> Int -> Double
       -> Direction -> Direction -> QuadForest -> IO QuadForest
 quadForestSegmentEdges detectRounds detectBias detectDir propRounds
@@ -311,13 +324,13 @@ quadForestSegmentEdges detectRounds detectBias detectDir propRounds
     if r /= c'SUCCESS
       then error $ "quadForestSegmentEdges failed with " ++ (show r)
       else quadForestRefresh forest
-
+-}
 quadForestGetSegments :: QuadForest -> IO [ForestSegment]
 quadForestGetSegments f =
   withForeignPtr (quadForestPtr f) $ \pforest -> do
     let
       targetSize = quadForestSegments f
-      allocTargetArray :: IO (Ptr (Ptr C'quad_forest_segment))
+      allocTargetArray :: IO (Ptr (Ptr C'segment))
       allocTargetArray = mallocArray targetSize
     ptarget <- allocTargetArray
     c'quad_forest_get_segments pforest ptarget
@@ -339,12 +352,14 @@ quadForestGetSegmentTrees forest ss = do -- 14 x 29
 
 
 -- | Creates an image tree from a list item by casting and converting
+{-
 edgeChainFromListItem :: Ptr C'list_item -> IO (Ptr C'quad_forest_edge_chain)
 edgeChainFromListItem pitem = do
   item <- peek pitem
   return $ castPtr $ c'list_item'data item
   --return $ c'quad_forest_edge_chain'first edgechain
-
+  -}
+{-
 createEdgeChain :: Ptr C'quad_forest_edge_chain -> IO [((Int,Int),(Int,Int))]
 createEdgeChain pchain = do
   flist <- allocList
@@ -353,7 +368,8 @@ createEdgeChain pchain = do
     if r /= c'SUCCESS
       then error $ "Getting edge chain failed with " ++ (show r)
       else createList plist lineFromListItem
-
+-}
+{-
 getPathSniffers :: QuadForest -> IO [((Int,Int),(Int,Int))]
 getPathSniffers forest = do
   flist <- allocList
@@ -363,13 +379,14 @@ getPathSniffers forest = do
       if r /= c'SUCCESS
         then error $ "Getting path sniffers failed with " ++ (show r)
         else createList plist lineFromListItem
-
+-}
+        
 getForestLinks :: QuadForest -> IO [(((Int,Int),(Int,Int)),Double)]
 getForestLinks forest = do
   flist <- allocList
   withForeignPtr flist $ \plist ->
     withForeignPtr (quadForestPtr forest) $ \pforest -> do
-      r <- c'quad_forest_get_links pforest plist
+      r <- c'quad_forest_get_links pforest plist c'v_LINK_NONE
       if r /= c'SUCCESS
         then error $ "Getting links failed with " ++ (show r)
         else createList plist weightedLineFromListItem
@@ -382,13 +399,13 @@ createEdgeChain pedge = do
   --next <- peek $ p'quad_forest_edge'next pedge
   liftM ((:) (hForestEdge edge)) (createEdgeChain $ c'quad_forest_edge'next edge)
   -}
-
+{-
 quadForestGetBoundaries :: QuadForest -> IO [[((Int,Int),(Int,Int))]]
 quadForestGetBoundaries forest = do
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
     l <- createList (p'quad_forest'edges pforest) edgeChainFromListItem
     mapM createEdgeChain l
-
+-}
 forestSegmentNeighbors :: QuadForest -> [ForestSegment] -> IO [ForestSegment]
 forestSegmentNeighbors forest ss = do
   flist <- allocList
@@ -498,7 +515,6 @@ instance NFData QuadTree where
     quadTreeSize tree `deepseq`
     quadTreeLevel tree `deepseq`
     quadTreeStat tree `deepseq`
-    quadTreeEdge tree `seq`
     quadTreeChildNW tree `seq`
     quadTreeChildNE tree `seq`
     quadTreeChildSW tree `seq`
@@ -513,6 +529,7 @@ instance NFData ForestSegment where
     segmentStat segment `deepseq`
     segmentColor segment `deepseq` ()
 
+{-
 instance NFData ForestEdge where
   rnf edge =
     edgeDX edge `deepseq`
@@ -523,6 +540,7 @@ instance NFData ForestEdge where
     edgeDev edge `deepseq`
     edgeFound edge `deepseq`
     edgeDir edge `deepseq` ()
+-}
 
 parMap' :: (a -> b) -> [a] -> Eval [b]
 parMap' f [] = return []
@@ -536,3 +554,176 @@ mapDeep _ [] = []
 mapDeep op xs =
   unsafePerformIO $ do
     evaluate $! deep $ runEval $ parMap' op $ xs
+
+
+data QuadTree = EmptyQuadTree |
+  QuadTree
+  { quadTreePtr :: Ptr C'quad_tree
+  , quadTreeX :: Int
+  , quadTreeY :: Int
+  , quadTreeSize :: Int
+  , quadTreeLevel :: Int
+  , quadTreeStat :: Statistics
+  --, quadTreeEdge :: ForestEdge
+  --, quadTreeSegment :: ForestSegment
+  , quadTreeChildNW :: QuadTree
+  , quadTreeChildNE :: QuadTree
+  , quadTreeChildSW :: QuadTree
+  , quadTreeChildSE :: QuadTree
+  } deriving Eq
+
+{-
+quadTreeHasEdge  = edgeFound . quadTreeEdge
+quadTreeHasVEdge t =
+  (quadTreeHasEdge t) && ((==DirV) $ edgeDir $ quadTreeEdge t)
+quadTreeHasHEdge t =
+  (quadTreeHasEdge t) && ((==DirH) $ edgeDir $ quadTreeEdge t)
+-}
+  
+quadTreeFromPtr :: Ptr C'quad_tree -> IO QuadTree
+quadTreeFromPtr ptree
+  | ptree == nullPtr = return EmptyQuadTree
+  | otherwise        = do
+    (C'quad_tree x y s l stat _ nw ne sw se _ _ _ _ _ _ _) <- peek ptree
+    tnw <- quadTreeFromPtr nw
+    tne <- quadTreeFromPtr ne
+    tsw <- quadTreeFromPtr sw
+    tse <- quadTreeFromPtr se
+    return $ QuadTree ptree
+      (fromIntegral x)
+      (fromIntegral y)
+      (fromIntegral s)
+      (fromIntegral l)
+      (hStatistics stat)
+      tnw tne tsw tse
+
+-- | Creates an image tree from a list item by casting and converting
+quadTreeFromListItem :: Ptr C'list_item -> IO QuadTree
+quadTreeFromListItem pitem = do
+  item <- peek pitem
+  ptree <- peek $ castPtr $ c'list_item'data item
+  quadTreeFromPtr $ castPtr ptree
+
+-- | Divides the tree in four equal parts in quad-tree fashion. Causes side
+--   effects as the original tree will have four child trees after this
+--   operation.
+quadTreeDivide :: QuadForest -> QuadTree -> IO [QuadTree]
+quadTreeDivide forest tree =
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_tree_divide pforest (quadTreePtr tree)
+    if r /= c'SUCCESS
+      then error $ "Divide tree failed with " ++ (show r)
+      else do
+        ctree <- peek (quadTreePtr tree)
+        liftM (filter (/=EmptyQuadTree)) $ mapM quadTreeFromPtr
+          [ c'quad_tree'nw ctree
+          , c'quad_tree'ne ctree
+          , c'quad_tree'sw ctree
+          , c'quad_tree'se ctree ]
+
+quadTreeChildStat :: QuadForest -> QuadTree -> IO [Statistics]
+quadTreeChildStat f t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+      allocChildArray :: IO (Ptr C'quad_tree)
+      allocChildArray = mallocArray 4
+    pchildren <- allocChildArray
+    r <- c'quad_tree_get_child_statistics pforest (quadTreePtr t) pchildren
+    if r /= c'SUCCESS
+      then error $ "Get child statistics failed with " ++ (show r)
+      else do
+        children <- (peekArray 4 pchildren)
+        return $ map (hStatistics.c'quad_tree'stat) children
+
+quadTreeNeighborhoodStat :: QuadForest -> Double -> QuadTree -> IO Statistics
+quadTreeNeighborhoodStat f m t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+      stat = C'statistics 0 0 0 0 0 0
+    with stat $ \pstat -> do
+      r <- c'quad_tree_get_neighborhood_statistics pforest (quadTreePtr t) pstat (realToFrac m)
+      if r /= c'SUCCESS
+         then error $ "Get neighborhood statistics failed with " ++ (show r)
+         else do
+           nstat <- peek pstat
+           return $ hStatistics nstat
+
+-- | Finds the current neighbors of the given tree.
+quadTreeNeighbors :: QuadTree -> IO [QuadTree]
+quadTreeNeighbors tree = do
+  flist <- allocList
+  withForeignPtr flist $ \plist -> do
+    r <- c'quad_tree_get_neighbors plist (quadTreePtr tree)
+    if r /= c'SUCCESS
+      then error $ "Getting tree neighbors failed with " ++ (show r)
+      else createList plist quadTreeFromListItem
+
+quadTreeEdgeResponse :: QuadForest -> QuadTree -> IO (Double,Double)
+quadTreeEdgeResponse f t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+        dx :: CDouble
+        dx = 0
+        dy :: CDouble
+        dy = 0
+    with dx $ \pdx ->
+      with dy $ \pdy -> do
+        r <- c'quad_tree_get_edge_response pforest (quadTreePtr t) pdx pdy
+        if r /= c'SUCCESS
+          then error $ "Get tree edge response failed with " ++ (show r)
+          else do
+            rdx <- peek pdx
+            rdy <- peek pdy
+            return (realToFrac rdx, realToFrac rdy)
+            --return $ sqrt $ (realToFrac rdx)**2 + (realToFrac rdy)**2
+
+quadTreeChildEdgeResponse :: QuadForest -> QuadTree -> IO [(Double,Double)]
+quadTreeChildEdgeResponse f t =
+  withForeignPtr (quadForestPtr f) $ \pforest -> do
+    let
+      allocDArray :: IO (Ptr CDouble)
+      allocDArray = mallocArray 4
+    pdx <- allocDArray
+    pdy <- allocDArray
+    r <- c'quad_tree_get_child_edge_response pforest (quadTreePtr t) pdx pdy
+    if r /= c'SUCCESS
+      then error $ "Get child edge response failed with " ++ (show r)
+      else do
+        xs <- (peekArray 4 pdx)
+        ys <- (peekArray 4 pdy)
+        return $ zip (map realToFrac xs) (map realToFrac ys)
+
+-- | Initializes a disjunctive set for the tree by setting the parent to
+--   self and rank to zero.
+quadTreeSegmentInit :: QuadTree -> IO QuadTree
+quadTreeSegmentInit t = do
+  c'quad_tree_ensure_segment (quadTreePtr t) nullPtr
+  quadTreeFromPtr $ quadTreePtr t
+
+-- | Union part of the Union-Find disjunctive set algorithm. Creates a union
+--   of two sets by assigning the parent of the higher ranking tree as the
+--   parent of the union. As the result, the two trees in question will have
+--   the same classId. Loses persistency, as the classId is changed in the
+--   underlying c structure, so previous versions of the trees that still
+--   point to the same c structure will have different classId.
+quadTreeSegmentUnion :: QuadTree -> QuadTree -> IO ()
+quadTreeSegmentUnion t1 t2 =
+  c'quad_tree_segment_union (quadTreePtr t1) (quadTreePtr t2)
+
+segmentUnion :: ForestSegment -> ForestSegment -> IO ()
+segmentUnion s1 s2 =
+  c'segment_union (segmentPtr s1) (segmentPtr s2)
+
+-- | Creates a union of two segments that are larger than trees.
+--forestSegmentUnion :: ForestSegment -> ForestSegment -> IO ()
+--forestSegmentUnion s1 s2 =
+--  c'quad_forest_segment_union (segmentPtr s1) (segmentPtr s2)
+
+-- | Find part of the Union-Find disjunctive set algorithm. Finds the pointer
+--   of the parent tree, caches it in the c structure, and creates an Integer
+--   from the pointer. May cause side effects as the parent pointer is
+--   cached to shorten the search paths for better efficiency.
+quadTreeSegmentFind :: QuadTree -> IO (Integer)
+quadTreeSegmentFind t = do
+  tid <- c'quad_tree_segment_id (quadTreePtr t)
+  return $ fromIntegral tid

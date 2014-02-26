@@ -1,13 +1,15 @@
 module Main where
 
 import CVSU.Types
-import CVSU.PixelImage
+import CVSU.PixelImage hiding (writePixelImage)
 import CVSU.QuadForest
+import CVSU.Parsing
 
 import CV.Image
 import CV.CVSU
 import CV.CVSU.Drawing
 
+import Foreign.Storable
 import ReadArgs
 
 -- Calculates edge responses with integral images, then segments edges using
@@ -30,12 +32,17 @@ main = do
   (maxSize, minSize, sourceFile, targetFile) <- readArgs
   img <- expectFloatGrey =<< readFromFile sourceFile
   pimg <- toPixelImage $ unsafeImageTo8Bit $ img
+  pimg2 <- toPixelImage $ unsafeImageTo8Bit $ grayToRGB img
+  print "img"
   forest <- quadForestCreate maxSize minSize pimg
+  
+  print "forest"
   pforest <- quadForestParse forest
+  print "parse"
   --bs <- quadForestGetBoundaries sforest
   --ls <- getForestLinks pforest
   --saveImage targetFile $
-  quadForestVisualizeParseResult pforest pimg >>= writePixelImage targetFile
+  quadForestVisualizeParseResult pforest pimg2 >>= writePixelImage targetFile
     --drawWeightedLines (0,1,1) 1 ls $
     --drawLines (0,1,1) 2 (concat bs) $
     --grayToRGB img

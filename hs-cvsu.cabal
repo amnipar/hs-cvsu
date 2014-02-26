@@ -25,7 +25,6 @@ Library
     CVSU.ConnectedComponents
     CVSU.Integral
     CVSU.Edges
-    CVSU.QuadTree
     CVSU.QuadForest
     CVSU.TemporalForest
     CVSU.Segmentation
@@ -34,15 +33,11 @@ Library
   Other-Modules:
     CVSU.Bindings.Types
     CVSU.Bindings.TypedPointer
-    CVSU.Bindings.Annotation
     CVSU.Bindings.List
     CVSU.Bindings.PixelImage
     CVSU.Bindings.ConnectedComponents
     CVSU.Bindings.Integral
     CVSU.Bindings.Edges
-    CVSU.Bindings.Context
-    CVSU.Bindings.Annotation
-    CVSU.Bindings.QuadTree
     CVSU.Bindings.QuadForest
     CVSU.Bindings.BackgroundForest
     CVSU.Bindings.TemporalForest

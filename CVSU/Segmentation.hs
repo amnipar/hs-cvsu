@@ -1,14 +1,19 @@
 module CVSU.Segmentation
 ( divideUntilConsistent
 , quadForestSegment
+, quadForestRefreshSegments
 , quadForestSegmentByDeviation
 , quadForestSegmentByOverlap
-, quadForestSegmentByBoundaries
+--, quadForestSegmentByBoundaries
 ) where
 
+import CVSU.Bindings.Segmentation
+import CVSU.Bindings.Types
 import CVSU.Types
-import CVSU.QuadTree
+--import CVSU.QuadTree
 import CVSU.QuadForest
+
+import Foreign.ForeignPtr
 
 import Control.DeepSeq
 
@@ -73,8 +78,16 @@ quadForestSegment treeConsistent treesEqual segmentsEqual forest = do
     mergeSegments (s:ss) = do
       ns <- forestSegmentNeighbors forest $! [s]
       --let ens = filter
-      rs <- ns `deepseq` mapM (forestSegmentUnion s) $! filter (segmentsEqual s) ns
+      rs <- ns `deepseq` mapM (segmentUnion s) $! filter (segmentsEqual s) ns
       ns `deepseq` rs `deepseq` mergeSegments ss
+
+quadForestRefreshSegments :: QuadForest -> IO QuadForest
+quadForestRefreshSegments forest = do
+  withForeignPtr (quadForestPtr forest) $ \pforest -> do
+    r <- c'quad_forest_refresh_segments pforest
+    if r /= c'SUCCESS
+      then error $ "Refresh segments failed with " ++ (show r)
+      else quadForestRefresh forest
 
 quadForestSegmentByDeviation :: Double -> Double -> QuadForest -> IO QuadForest
 quadForestSegmentByDeviation threshold alpha f =
@@ -96,7 +109,7 @@ quadForestSegmentByOverlap alpha treeOverlap segmentOverlap forest =
     if r /= c'SUCCESS
       then error $ "quadForestSegmentEntropy failed with " ++ (show r)
       else quadForestRefresh forest
-
+{-
 quadForestSegmentByBoundaries :: Int -> Double -> Double -> Double -> Double -> Bool -> Bool -> QuadForest -> IO QuadForest
 quadForestSegmentByBoundaries rounds highBias lowFactor treeAlpha segmentAlpha useHysteresis usePruning forest =
   withForeignPtr (quadForestPtr forest) $ \pforest -> do
@@ -111,3 +124,4 @@ quadForestSegmentByBoundaries rounds highBias lowFactor treeAlpha segmentAlpha u
     if r /= c'SUCCESS
       then error $ "Segment by boundaries failed with " ++ (show r)
       else quadForestRefresh forest
+      -}

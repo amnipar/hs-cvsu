@@ -6,6 +6,7 @@ module CVSU.Bindings.Segmentation where
 #strict_import
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.QuadForest
 import Foreign.C.Types
 import Foreign.Ptr
 

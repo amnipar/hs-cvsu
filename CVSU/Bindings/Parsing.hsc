@@ -8,16 +8,17 @@ module CVSU.Bindings.Parsing where
 import CVSU.Bindings.Types
 import CVSU.Bindings.PixelImage
 import CVSU.Bindings.QuadForest
+import CVSU.Bindings.List
 
 import Foreign.C.Types
 import Foreign.Ptr
 
-#callback_t context_operation , Ptr <quad_forest> -> Ptr <quad_tree> \
-  -> Ptr <list> -> IO <result>
+-- #callback_t context_operation , Ptr <quad_forest> -> Ptr <quad_tree> \
+--  -> Ptr <list> -> IO <result>
 
-#ccall run_context_operation , Ptr <quad_forest> -> Ptr <list> -> Ptr <list> \
-  -> <context_operation> -> <context_operation> -> <context_operation> \
-  -> CULong -> <truth_value> -> IO <result>
+-- #ccall run_context_operation , Ptr <quad_forest> -> Ptr <list> -> Ptr <list> \
+--  -> p'context_operation -> p'context_operation -> p'context_operation \
+--  -> CULong -> <truth_value> -> IO <result>
 
 #ccall quad_forest_calculate_accumulated_stats , Ptr <quad_forest> \
   -> CULong -> IO <result>

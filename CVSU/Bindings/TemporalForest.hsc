@@ -54,7 +54,7 @@ import Foreign.ForeignPtr
 #ccall temporal_forest_segment_count , Ptr <temporal_forest> -> IO CULong
 
 #ccall temporal_forest_get_segments , Ptr <temporal_forest> \
-  -> Ptr (Ptr <quad_forest_segment>) -> IO <result>
+  -> Ptr (Ptr <segment>) -> IO <result>
 
 #ccall temporal_forest_get_segment_boundary , Ptr <temporal_forest> \
-  -> Ptr <quad_forest_segment> -> Ptr <list> -> IO <result>
+  -> Ptr <segment> -> Ptr <list> -> IO <result>

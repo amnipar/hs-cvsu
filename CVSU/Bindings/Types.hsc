@@ -121,6 +121,27 @@ import Foreign.Ptr
 #field bottom , <point>
 #stoptype
 
+#starttype colored_rect
+#field left , CShort
+#field right , CShort
+#field top , CShort
+#field bottom , CShort
+#field color[0] , Word8
+#field color[1] , Word8
+#field color[2] , Word8
+#stoptype
+
+#starttype uncertain_rect
+#field left , CShort
+#field right , CShort
+#field top , CShort
+#field bottom , CShort
+#field left_uncertainty , CShort
+#field right_uncertainty , CShort
+#field top_uncertainty , CShort
+#field bottom_uncertainty , CShort
+#stoptype
+
 -- statistics type
 
 #starttype statistics
