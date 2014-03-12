@@ -21,6 +21,8 @@ Library
     CVSU.Types
     CVSU.C.Types
     CVSU.List
+    CVSU.Set
+    CVSU.Graph
     CVSU.PixelImage
     CVSU.ConnectedComponents
     CVSU.Integral
@@ -34,6 +36,8 @@ Library
     CVSU.Bindings.Types
     CVSU.Bindings.TypedPointer
     CVSU.Bindings.List
+    CVSU.Bindings.Set
+    CVSU.Bindings.Graph
     CVSU.Bindings.PixelImage
     CVSU.Bindings.ConnectedComponents
     CVSU.Bindings.Integral
@@ -64,6 +68,8 @@ Library
     c/cvsu_types.h,
     c/cvsu_typed_pointer.h,
     c/cvsu_list.h,
+    c/cvsu_set.h,
+    c/cvsu_graph.h,
     c/cvsu_pixel_image.h,
     c/cvsu_connected_components.h,
     c/cvsu_filter.h,
@@ -85,6 +91,8 @@ Library
     c/cvsu_types.h,
     c/cvsu_typed_pointer.h,
     c/cvsu_list.h,
+    c/cvsu_set.h,
+    c/cvsu_graph.h,
     c/cvsu_pixel_image.h,
     c/cvsu_connected_components.h,
     c/cvsu_filter.h,
@@ -104,6 +112,8 @@ Library
     c/cvsu_types.c,
     c/cvsu_typed_pointer.c,
     c/cvsu_list.c,
+    c/cvsu_set.c,
+    c/cvsu_graph.c,
     c/cvsu_pixel_image.c,
     c/cvsu_connected_components.c,
     c/cvsu_filter.c,

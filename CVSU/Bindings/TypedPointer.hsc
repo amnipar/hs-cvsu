@@ -26,6 +26,13 @@ import Foreign.Ptr
 #num t_F64
 #num t_tuple
 #num t_list
+#num t_set
+#num t_graph
+#num t_node
+#num t_attribute
+#num t_attribute_list
+#num t_link
+#num t_link_head
 #num t_statistics
 #num t_accumulated_stat
 #num t_neighborhood_stat
