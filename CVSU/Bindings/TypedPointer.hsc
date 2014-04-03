@@ -53,6 +53,10 @@ import Foreign.Ptr
 #field value , Ptr ()
 #stoptype
 
+#ccall typed_pointer_alloc , IO (Ptr <typed_pointer>)
+
+#ccall typed_pointer_free , Ptr <typed_pointer> -> IO ()
+
 #ccall typed_pointer_create , Ptr <typed_pointer> -> <type_label> -> CULong
 
 #ccall typed_pointer_destroy , Ptr <typed_pointer> -> IO ()
@@ -62,6 +66,9 @@ import Foreign.Ptr
 #ccall typed_pointer_is_null , Ptr <typed_pointer> -> IO <truth_value>
 
 #ccall is_typed_pointer , Ptr <typed_pointer> -> IO <truth_value>
+
+#ccall typed_pointer_set_value , Ptr <typed_pointer> -> CULong -> Ptr () \
+    -> IO (<result>)
 
 #ccall tuple_create , Ptr <typed_pointer> -> CULong -> IO <result>
 

@@ -18,6 +18,23 @@ data Attribute a =
     attributeValue :: a
   }
 
+attributeAlloc :: IO (ForeignPtr C'attribute)
+attributeAlloc = do
+  ptr <-
+
+cAttribute :: Attributable a => Attribute a -> IO (ForeignPtr C'attribute)
+cAttribute (Attribute attrPtr attrId attrValue) =
+  if attrPtr /= nullPtr
+       then return attrPtr
+       else do
+         fattribute <- attributeAlloc
+         withForeignPtr fattribute $ \pattribute ->
+           tptr <- convertFrom attrValue
+           poke (p'attribute'key pattribute) (fromIntegral attrId)
+           poke (p'attribute'value pattribute) tptr
+
+hAttribute :: Attributable a => ForeignPtr C'attribute -> IO (Attribute a)
+
 instance (Eq a) => Eq (Attribute a) where
   a == b
   | a == NoSuchAttribute || b == NoSuchAttribute = False
@@ -25,7 +42,7 @@ instance (Eq a) => Eq (Attribute a) where
     (attributeId a == attributeId b) && (attributeValue a == attributeValue b)
 
 -- | In order to be usable as attributes, a type must provide conversions from
--- and to typed pointers.
+--   and to typed pointers.
 class Attributable a where
   convertTo :: C'typed_pointer -> IO a
   convertFrom :: a -> IO C'typed_pointer
@@ -54,13 +71,13 @@ attributeCompare :: Eq Attribute a =>
 attributeCompare attrLabel attrEqual a b =
   attrEqual (attributeGet attrLabel a) (attributeGet attrLabel b)
 
-data Node =
+data Node a =
   Node
   { nodePtr :: !(ForeignPtr C'node)
   , nodePosition :: (Double, Double)
   , nodeOrientation :: Double
   , nodeScale :: Int
-  , nodeAttributes :: [Attribute]
+  , nodeAttribute :: Attribute a
   , nodeLinks :: [Link]
   } deriving Eq
 
@@ -71,17 +88,17 @@ data Link =
   { linkPtr :: !(ForeignPtr C'link)
   , linkHead :: !(ForeignPtr C'link_head)
   , linkWeight :: Double
-  , linkAttributes :: [Attribute]
+  -- , linkAttribute :: a
   } deriving Eq
 
 linkGetOrigin :: Link -> Node
 
 linkGetOther :: Link -> Node
 
-data Graph =
+data Graph n =
   Graph
   { graphPtr :: !(ForeignPtr C'graph
-    nodes :: [Node]
+    nodes :: [Node n]
     links :: [Link]
   } deriving Eq
 
@@ -89,13 +106,27 @@ data GraphNeighborhood =
   Neighborhood4 |
   Neighborhood8
 
+graphAlloc :: (ForeignPtr C'graph)
+graphAlloc = do
+  ptr <- c'graph_alloc
+  if ptr /= nullPtr
+    then newForeignPtr ptr (c'graph_free ptr)
+    else error "Memory allocation failed in graphAlloc"
+
 -- | Creates an empty graph. In the underlying structure, memory will be
 -- allocated for the given amount of nodes and links.
-graphCreate :: Int -> Int -> Graph
-graphCreate nodeSize linkSize =
+graphCreate :: Int -> Int -> Attribute a -> IO (Graph a)
+graphCreate nodeSize linkSize attrLabel =
 
 -- | Creates a regular grid graph from an image. The step in pixels between grid
 -- rows and cols can be given, like also the neighborhood type and the label for
 -- the attribute that will be used for storing the pixel values.
-graphFromImage :: PixelImage -> Int -> GraphNeighborhood -> Attribute a -> Graph
-graphFromImage image step neighborhood attrLabel =
+graphFromImage :: Num a, Pointable a =>
+  PixelImage -> Int -> Int -> Int -> Int -> GraphNeighborhood -> Attribute a -> IO (Graph a)
+graphFromImage image step neighborhood attrLabel = do
+  fgraph = graphAlloc
+  ftptr <- tptrFrom
+  withForeignPtr fgraph $ \pgraph ->
+    withForeignPtr (imagePtr image) $ \pimage ->
+      withForeignPtr
+      attr <-

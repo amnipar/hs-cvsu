@@ -22,13 +22,18 @@ componentLabel = attributeLabel 2 $ Set 0
 -- using the setAttr attribute for storing the set membership.
 -- if has different value, creates a new set and uses the setLabel.
 -- returns the new setLabel and the new Node.
-unionWithSimilarNeighbor :: Int -> Int -> Int -> Node -> (Int, Node)
+unionWithSimilarNeighbor :: Eq a => Attribute a -> Attribute Set -> Int -> Node a-> (Int, Node (a,Set))
 unionWithSimilarNeighbor valueAttr setAttr setLabel node
   | null similarNeighbors = (setLabel+1, attributeSetCreate setAttr setLabel node)
   | otherwise = (setLabel, attributeSetUnion setAttr node similarNeighbors)
   where
     similarNeighbors =
       filter (attributeCompare valueAttr (==) node) $ nodeNeighbors node
+
+connectedComponentsGraph :: Image GrayScale D8 -> IO (Graph (Int, Set)
+connectedComponentsGraph img = do
+  pimg <- toPixelImage img
+  graphFromImage pimg 1 Neighborhood4 binaryValue
 
 -- takes a graph and labels neighboring nodes that have the same value for a
 -- the attribute valueAttr with the same label value in attribute labelAttr
@@ -43,14 +48,14 @@ unionWithSimilarNeighbor valueAttr setAttr setLabel node
 -- need a label-setting function that returns the current/next? label value.
 -- actually shouldn't label nodes but make a union with similar neighbors.
 
-findConnectedComponents :: Int -> Int -> Graph -> Graph
-findConnectedComponents valueAttr setAttr (Graph nodes e i) =
-  Graph (snd.mapAccumL (unionWithSimilarNeighbor valueAttr setAttr) 0 nodes) e i
+findConnectedComponents :: Eq a => Int -> Int -> Graph a -> Graph (a,Set)
+findConnectedComponents valueAttr setAttr (Graph p nodes links) =
+  Graph p (snd.mapAccumL (unionWithSimilarNeighbor valueAttr setAttr) 1 nodes) links
 
 main = do
   (maxSize, minSize, sourceFile, targetFile) <- readArgs
   img <- expectFloatGrey =<< readFromFile sourceFile
-  pimg <- toPixelImage $ threshold 128 $ unsafeImageTo8Bit $ img
+  pimg <- toPixelImage $ threshold 128 $ unsafeImageTo8Bit img
   g <- graphFromImage pimg 1 Neighborhood4 binaryValue
   cg <- findConnectedComponents binaryValue componentLabel g
 

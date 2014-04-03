@@ -96,22 +96,41 @@ data TypedPointer =
     tptrValue :: Ptr()
   }
 
-class Pointable a where
-  convertTo :: C'typed_pointer -> IO a
-  --convertFrom :: a -> IO C'typed_pointer
+typedPointerAlloc :: IO (ForeignPtr C'typed_pointer)
 
-case t of
-    U8  -> (\p o -> (liftM fromIntegral $ peek (advancePtr ((castPtr p)::Ptr
-CUChar)
+typedPointerInit :: Ptr C'typed_pointer -> C'type_label -> Int -> IO ()
+typedPointerInit tptr l c = do
+  r <- c'typed_pointer'create tptr l (fromIntegral c)
+  if r /= c'SUCCESS
+    then error "Failed to initialize typed_pointer"
+    else return
+
+class Pointable a where
+  tptrTo :: C'typed_pointer -> IO a
+  tptrFrom :: a -> IO (ForeignPtr C'typed_pointer)
 
 instance Pointable (Int) where
-  convertTo (C'typed_pointer l c t v)
-    | l == c't_S8 = fromIntegral $ peek ((castPtr p)::Ptr CSChar
-    | l == c't_U8 = fromIntegral $ peek ((castPtr p)::Ptr CUChar
-    | l == c't_S16 = fromIntegral $ peek ((castPtr p)::Ptr CSShort
-    | l == c't_U16 = fromIntegral $ peek ((castPtr p)::Ptr CUShort
-    | l == c't_S32 = fromIntegral $ peek ((castPtr p)::Ptr CLong
-    | l == c't_U32 = fromIntegral $ peek ((castPtr p)::Ptr CULong
-    | otherwise error "unable to convert"
+  tptrTo :: C'typed_pointer -> Int
+  tptrTo (C'typed_pointer l c t v)
+    | l == c't_S8  = liftM fromIntegral $ peek ((castPtr p)::Ptr CSChar)
+    | l == c't_U8  = liftM fromIntegral $ peek ((castPtr p)::Ptr CUChar)
+    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr p)::Ptr CSShort)
+    | l == c't_U16 = liftM fromIntegral $ peek ((castPtr p)::Ptr CUShort)
+    | l == c't_S32 = liftM fromIntegral $ peek ((castPtr p)::Ptr CLong)
+    | l == c't_U32 = liftM fromIntegral $ peek ((castPtr p)::Ptr CULong)
+    | otherwise error "unable to convert " ++ (show l) ++ " to Int"
+  tptrFrom :: Integral i => i -> IO (ForeignPtr C'typed_pointer)
+  tptrFrom i = do
+    ftptr <- typedPointerAlloc
+    withForeignPtr ftptr $ \tptr -> do
+      typedPointerInit tptr c't_S32 1
+      let
+        value :: CLong
+        value = fromIntegral i
+      with value $ \pvalue -> do
+        r <- c'typed_pointer_set_value tptr 0 (castPtr pvalue)
+        if r /= c'SUCCESS
+          then error "Failed to set value of typed_pointer"
+          else return ftptr
 
 --instance Pointable (Float) where
