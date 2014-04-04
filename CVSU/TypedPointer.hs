@@ -31,7 +31,8 @@ data TypeLabel =
   LabelAttributeList |
   LabelLink |
   LabelLinkHead |
-  LabelStatistics
+  LabelStatistics |
+  LabelPixelImage
 
 cTypeLabel :: TypeLabel -> C'type_label
 cTypeLabel l
@@ -59,6 +60,7 @@ cTypeLabel l
   | l == LabelLink = c't_link
   | l == LabelLinkHead = c't_link_head
   | l == LabelStatistics = c't_statistics
+  | l == LabelPixelImage = c't_pixel_image
 
 hTypeLabel :: C'type_label -> TypeLabel
 hTypeLabel l
@@ -86,7 +88,37 @@ hTypeLabel l
   | l == c't_link = LabelLink
   | l == c't_link_head = LabelLinkHead
   | l == c't_statistics = LabelStatistics
+  | l == c't_pixel_image = LabelPixelImage
 
+instance Show (C'type_label) where
+  show l
+    | l == c't_UNDEF =          "<undef>"
+    | l == c't_type  =          "<type>"
+    | l == c't_truth_value =    "<truth_value>"
+    | l == c't_pointer =        "<pointer>"
+    | l == c't_typed_pointer =  "<typed_pointer>"
+    | l == c't_string =         "<string>"
+    | l == c't_S8 =             "<S8>"
+    | l == c't_U8 =             "<U8>"
+    | l == c't_S16 =            "<S16>"
+    | l == c't_U16 =            "<U16>"
+    | l == c't_S32 =            "<S32>"
+    | l == c't_U32 =            "<U32>"
+    | l == c't_F32 =            "<F32>"
+    | l == c't_F64 =            "<F64>"
+    | l == c't_tuple =          "<tuple>"
+    | l == c't_list =           "<list>"
+    | l == c't_set =            "<set>"
+    | l == c't_graph =          "<graph>"
+    | l == c't_node =           "<node>"
+    | l == c't_attribute =      "<attribute>"
+    | l == c't_attribute_list = "<attribute_list>"
+    | l == c't_link =           "<link>"
+    | l == c't_link_head =      "<link_head>"
+    | l == c't_statistics =     "<statistics>"
+    | l == c't_pixel_image =    "<pixel_image>"
+
+{-
 data TypedPointer =
   TypedPointer
   { tptrPtr :: !(ForeignPtr C'typed_pointer)
@@ -95,42 +127,47 @@ data TypedPointer =
     tptrToken :: Integer
     tptrValue :: Ptr()
   }
+-}
 
 typedPointerAlloc :: IO (ForeignPtr C'typed_pointer)
+typedPointerAlloc = do
+  ptr <- c'typed_pointer'alloc
+  if ptr /= nullPtr
+    then newForeignPtr ptr (c'typed_pointer_free ptr)
+    else error "Memory allocation failed in typedPointerAlloc"
 
-typedPointerInit :: Ptr C'typed_pointer -> C'type_label -> Int -> IO ()
-typedPointerInit tptr l c = do
-  r <- c'typed_pointer'create tptr l (fromIntegral c)
-  if r /= c'SUCCESS
-    then error "Failed to initialize typed_pointer"
-    else return
+typedPointerCreate :: C'type_label -> Int -> Ptr ()
+    -> IO (ForeignPtr C'typed_pointer)
+typedPointerCreate l c p = do
+  ftptr <- typedPointerAlloc
+  withForeignPtr ftptr $ \ptptr -> do
+    r <- c'typed_pointer_create ptptr l (fromIntegral c) p
+    if r /= c'SUCCESS
+      then error "Failed to create typed pointer with " ++ (show r)
+      else return
 
 class Pointable a where
-  tptrTo :: C'typed_pointer -> IO a
-  tptrFrom :: a -> IO (ForeignPtr C'typed_pointer)
+  fromTypedPointer :: ForeignPtr C'typed_pointer -> IO a
+  fromTypedPointer ftptr =
+    withForeignPtr ftptr $ \ptptr -> convertFrom (peek ptptr)
+  convertFrom :: C'typed_pointer -> IO a
+  intoTypedPointer :: a -> IO (ForeignPtr C'typed_pointer)
 
 instance Pointable (Int) where
-  tptrTo :: C'typed_pointer -> Int
-  tptrTo (C'typed_pointer l c t v)
-    | l == c't_S8  = liftM fromIntegral $ peek ((castPtr p)::Ptr CSChar)
-    | l == c't_U8  = liftM fromIntegral $ peek ((castPtr p)::Ptr CUChar)
-    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr p)::Ptr CSShort)
-    | l == c't_U16 = liftM fromIntegral $ peek ((castPtr p)::Ptr CUShort)
-    | l == c't_S32 = liftM fromIntegral $ peek ((castPtr p)::Ptr CLong)
-    | l == c't_U32 = liftM fromIntegral $ peek ((castPtr p)::Ptr CULong)
+  convertFrom :: C'typed_pointer -> IO Int
+  convertFrom (C'typed_pointer l c t v)
+    | l == c't_S8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CSChar)
+    | l == c't_U8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CUChar)
+    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CSShort)
+    | l == c't_U16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CUShort)
+    | l == c't_S32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CLong)
+    | l == c't_U32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CULong)
     | otherwise error "unable to convert " ++ (show l) ++ " to Int"
-  tptrFrom :: Integral i => i -> IO (ForeignPtr C'typed_pointer)
-  tptrFrom i = do
-    ftptr <- typedPointerAlloc
-    withForeignPtr ftptr $ \tptr -> do
-      typedPointerInit tptr c't_S32 1
+  intoTypedPointer :: Integral i => i -> IO (ForeignPtr C'typed_pointer)
+  intoTypedPointer i = do
       let
         value :: CLong
         value = fromIntegral i
-      with value $ \pvalue -> do
-        r <- c'typed_pointer_set_value tptr 0 (castPtr pvalue)
-        if r /= c'SUCCESS
-          then error "Failed to set value of typed_pointer"
-          else return ftptr
+      with value $ \pvalue -> typedPointerCreate c't_S32 1 (castPtr pvalue)
 
 --instance Pointable (Float) where

@@ -45,6 +45,7 @@ import Foreign.Ptr
 #num t_segment_message
 #num t_segment
 #num t_stat_accumulator
+#num t_pixel_image
 
 #starttype typed_pointer
 #field type , <type_label>
@@ -57,7 +58,8 @@ import Foreign.Ptr
 
 #ccall typed_pointer_free , Ptr <typed_pointer> -> IO ()
 
-#ccall typed_pointer_create , Ptr <typed_pointer> -> <type_label> -> CULong
+#ccall typed_pointer_create , Ptr <typed_pointer> -> <type_label> -> CULong \
+    -> CULong -> Ptr () -> IO (<result>)
 
 #ccall typed_pointer_destroy , Ptr <typed_pointer> -> IO ()
 
@@ -66,6 +68,12 @@ import Foreign.Ptr
 #ccall typed_pointer_is_null , Ptr <typed_pointer> -> IO <truth_value>
 
 #ccall is_typed_pointer , Ptr <typed_pointer> -> IO <truth_value>
+
+#ccall typed_pointer_clone , Ptr <typed_pointer> -> Ptr <typed_pointer> \
+    -> IO (<result>)
+
+#ccall typed_pointer_copy , Ptr <typed_pointer> -> Ptr <typed_pointer> \
+    -> IO (<result>)
 
 #ccall typed_pointer_set_value , Ptr <typed_pointer> -> CULong -> Ptr () \
     -> IO (<result>)
