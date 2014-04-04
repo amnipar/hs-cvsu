@@ -1,11 +1,18 @@
 module CVSU.TypedPointer
-(
-
+( Pointable(..)
 ) where
 
 import CVSU.Bindings.TypedPointer
+import CVSU.Bindings.Types
+
 import Foreign.C.Types
 import Foreign.Ptr
+import Foreign.ForeignPtr hiding (newForeignPtr)
+import Foreign.Storable
+import Foreign.Marshal.Utils
+import Foreign.Concurrent
+
+import Control.Monad (liftM)
 
 data TypeLabel =
   LabelUndef |
@@ -32,7 +39,7 @@ data TypeLabel =
   LabelLink |
   LabelLinkHead |
   LabelStatistics |
-  LabelPixelImage
+  LabelPixelImage deriving (Eq,Show)
 
 cTypeLabel :: TypeLabel -> C'type_label
 cTypeLabel l
@@ -52,7 +59,7 @@ cTypeLabel l
   | l == LabelCF64 = c't_F64
   | l == LabelTuple = c't_tuple
   | l == LabelList = c't_list
-  | l == LabelSet = c't_set
+  | l == LabelSet = c't_disjoint_set
   | l == LabelGraph = c't_graph
   | l == LabelNode = c't_node
   | l == LabelAttribute = c't_attribute
@@ -80,7 +87,7 @@ hTypeLabel l
   | l == c't_F64 = LabelCF64
   | l == c't_tuple = LabelTuple
   | l == c't_list = LabelList
-  | l == c't_set = LabelSet
+  | l == c't_disjoint_set = LabelSet
   | l == c't_graph = LabelGraph
   | l == c't_node = LabelNode
   | l == c't_attribute = LabelAttribute
@@ -90,8 +97,8 @@ hTypeLabel l
   | l == c't_statistics = LabelStatistics
   | l == c't_pixel_image = LabelPixelImage
 
-instance Show (C'type_label) where
-  show l
+showTypeLabel :: C'type_label -> String
+showTypeLabel l
     | l == c't_UNDEF =          "<undef>"
     | l == c't_type  =          "<type>"
     | l == c't_truth_value =    "<truth_value>"
@@ -108,7 +115,7 @@ instance Show (C'type_label) where
     | l == c't_F64 =            "<F64>"
     | l == c't_tuple =          "<tuple>"
     | l == c't_list =           "<list>"
-    | l == c't_set =            "<set>"
+    | l == c't_disjoint_set =   "<disjoint_set>"
     | l == c't_graph =          "<graph>"
     | l == c't_node =           "<node>"
     | l == c't_attribute =      "<attribute>"
@@ -131,43 +138,44 @@ data TypedPointer =
 
 typedPointerAlloc :: IO (ForeignPtr C'typed_pointer)
 typedPointerAlloc = do
-  ptr <- c'typed_pointer'alloc
+  ptr <- c'typed_pointer_alloc
   if ptr /= nullPtr
     then newForeignPtr ptr (c'typed_pointer_free ptr)
     else error "Memory allocation failed in typedPointerAlloc"
 
-typedPointerCreate :: C'type_label -> Int -> Ptr ()
+typedPointerCreate :: C'type_label -> Int -> Int -> Ptr ()
     -> IO (ForeignPtr C'typed_pointer)
-typedPointerCreate l c p = do
+typedPointerCreate l c t p = do
   ftptr <- typedPointerAlloc
   withForeignPtr ftptr $ \ptptr -> do
-    r <- c'typed_pointer_create ptptr l (fromIntegral c) p
+    r <- c'typed_pointer_create ptptr l (fromIntegral c) (fromIntegral t) p
     if r /= c'SUCCESS
-      then error "Failed to create typed pointer with " ++ (show r)
-      else return
+      then error $ "Failed to create typed pointer with " ++ (show r)
+      else return ftptr
 
 class Pointable a where
   fromTypedPointer :: ForeignPtr C'typed_pointer -> IO a
   fromTypedPointer ftptr =
-    withForeignPtr ftptr $ \ptptr -> convertFrom (peek ptptr)
+    withForeignPtr ftptr $ \ptptr -> do
+      tptr <- peek ptptr
+      convertFrom tptr
   convertFrom :: C'typed_pointer -> IO a
   intoTypedPointer :: a -> IO (ForeignPtr C'typed_pointer)
 
 instance Pointable (Int) where
-  convertFrom :: C'typed_pointer -> IO Int
   convertFrom (C'typed_pointer l c t v)
     | l == c't_S8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CSChar)
     | l == c't_U8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CUChar)
-    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CSShort)
+    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CShort)
     | l == c't_U16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CUShort)
     | l == c't_S32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CLong)
     | l == c't_U32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CULong)
-    | otherwise error "unable to convert " ++ (show l) ++ " to Int"
-  intoTypedPointer :: Integral i => i -> IO (ForeignPtr C'typed_pointer)
+    | otherwise    = error $ 
+        "Unable to convert " ++ (showTypeLabel l) ++ " to Int"
   intoTypedPointer i = do
       let
         value :: CLong
         value = fromIntegral i
-      with value $ \pvalue -> typedPointerCreate c't_S32 1 (castPtr pvalue)
+      with value $ \pvalue -> typedPointerCreate c't_S32 1 0 (castPtr pvalue)
 
 --instance Pointable (Float) where

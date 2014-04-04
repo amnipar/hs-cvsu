@@ -1,9 +1,21 @@
 module CVSU.Graph
-(
-
+( Attribute(..)
+, attributeCreate
+-- , attributeLabel
+, Node(..)
+, Link(..)
+, Graph(..)
+, GraphNeighborhood(..)
+, graphCreate
+, graphFromImage
 ) where
 
+import CVSU.Bindings.Types
 import CVSU.Bindings.Graph
+
+import CVSU.Types
+import CVSU.TypedPointer
+import CVSU.PixelImage
 
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
@@ -14,8 +26,8 @@ data Attribute a =
   NoSuchAttribute |
   Attribute
   { attributePtr :: !(ForeignPtr C'attribute)
-    attributeId :: Int
-    attributeValue :: a
+  , attributeId :: Int
+  , attributeValue :: a
   }
 
 attributeAlloc :: IO (ForeignPtr C'attribute)
@@ -33,35 +45,36 @@ attributeCreate attrKey attrValue = do
     withForeignPtr ftptr $ \ptptr -> do
       r <- c'attribute_create pattr (fromIntegral attrKey) ptptr
       if r /= c'SUCCESS
-        then error "Failed to create attribute with " ++ (show r)
+        then error $ "Failed to create attribute with " ++ (show r)
         else attributeFromPtr fattr
 
 attributeFromPtr :: Pointable a => ForeignPtr C'attribute -> IO (Attribute a)
 attributeFromPtr fattr =
-  withForeignPtr fattr $ \pattr ->
+  withForeignPtr fattr $ \pattr -> do
     C'attribute{
-      c'attribute'key = k
+      c'attribute'key = k,
       c'attribute'value = tptr
     } <- peek pattr
     v <- convertFrom tptr
-    return $ Attribute fattr k v
+    return $ Attribute fattr (fromIntegral k) v
 
 instance (Eq a) => Eq (Attribute a) where
-  a == b
-  | a == NoSuchAttribute || b == NoSuchAttribute = False
-  | otherwise =
-    (attributeId a == attributeId b) && (attributeValue a == attributeValue b)
+  (==) a b
+    | a == NoSuchAttribute || b == NoSuchAttribute = False
+    | otherwise = (attributeId a == attributeId b) && 
+                  (attributeValue a == attributeValue b)
 
 -- | In order to be usable as attributes, a type must provide conversions from
 --   and to typed pointers.
+{-
 class Attributable a where
   convertTo :: C'typed_pointer -> IO a
   convertFrom :: a -> IO C'typed_pointer
-
--- | Creates an attribute label. This is used for declaring the typeclass of the
--- attributes for use in functions.
-attributeLabel :: Int -> a -> Attribute a
-attributeLabel attrId attrVal = Attribute nullPtr attrId attrVal
+  -}
+-- | Creates an attribute label. This is used for declaring the typeclass of
+--   the attributes for use in functions.
+--attributeLabel :: Int -> a -> IO (Attribute a)
+--attributeLabel attrId attrVal = Attribute nullPtr attrId attrVal
 {-
 attributeGet :: Attribute a -> Node -> Attribute a
 attributeGet attrLabel node =
@@ -108,14 +121,14 @@ data Link =
 
 data Graph n =
   Graph
-  { graphPtr :: !(ForeignPtr C'graph
-    nodes :: [Node n]
-    links :: [Link]
+  { graphPtr :: !(ForeignPtr C'graph)
+  , nodes :: [Node n]
+  , links :: [Link]
   } deriving Eq
 
 data GraphNeighborhood =
   Neighborhood4 |
-  Neighborhood8
+  Neighborhood8 deriving (Eq,Show)
 
 cNeighborhood :: GraphNeighborhood -> C'graph_neighborhood
 cNeighborhood n
@@ -124,7 +137,7 @@ cNeighborhood n
   | otherwise          = c'NEIGHBORHOOD_0
 
 -- | Allocates memory for a graph structure and creates a foreign pointer
-graphAlloc :: (ForeignPtr C'graph)
+graphAlloc :: IO (ForeignPtr C'graph)
 graphAlloc = do
   ptr <- c'graph_alloc
   if ptr /= nullPtr
@@ -137,27 +150,28 @@ graphCreate :: Int -> Int -> Attribute a -> IO (Graph a)
 graphCreate nodeSize linkSize attrLabel = do
   fgraph <- graphAlloc
   withForeignPtr fgraph $ \pgraph ->
-    withForeignPtr (attrPtr attrLabel) $ \pattr -> do
+    withForeignPtr (attributePtr attrLabel) $ \pattr -> do
       r <- c'graph_create pgraph
                (fromIntegral nodeSize)
                (fromIntegral linkSize)
                pattr
       if r /= c'SUCCESS
-        then error "Failed to create graph with " ++ (show r)
+        then error $ "Failed to create graph with " ++ (show r)
         else graphFromPtr fgraph
 
-graphFromPtr fgraph = Graph fgraph [] []
+graphFromPtr :: ForeignPtr C'graph -> IO (Graph a)
+graphFromPtr fgraph = return $ Graph fgraph [] []
 
 -- | Creates a regular grid graph from an image. The step in pixels between grid
 -- rows and cols can be given, like also the neighborhood type and the label for
 -- the attribute that will be used for storing the pixel values.
-graphFromImage :: Num a, Pointable a => PixelImage -> Int -> Int -> Int -> Int
-    -> GraphNeighborhood -> Attribute a -> IO (Graph a)
+graphFromImage :: (Num a, Pointable a) => PixelImage -> Int -> Int -> Int
+    -> Int -> GraphNeighborhood -> Attribute a -> IO (Graph a)
 graphFromImage image offsetx offsety stepx stepy neighborhood attrLabel = do
   fgraph <- graphAlloc
   withForeignPtr fgraph $ \pgraph ->
     withForeignPtr (imagePtr image) $ \pimage ->
-      withForeignPtr (attrPtr attrLabel) $ \pattr -> do
+      withForeignPtr (attributePtr attrLabel) $ \pattr -> do
         r <- c'graph_create_from_image
                  pgraph
                  pimage
@@ -168,5 +182,5 @@ graphFromImage image offsetx offsety stepx stepy neighborhood attrLabel = do
                  (cNeighborhood neighborhood)
                  pattr
         if r /= c'SUCCESS
-          then error "Failed to create graph from image with " ++ (show r)
+          then error $ "Failed to create graph from image with " ++ (show r)
           else graphFromPtr fgraph

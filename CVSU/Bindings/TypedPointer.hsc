@@ -26,7 +26,7 @@ import Foreign.Ptr
 #num t_F64
 #num t_tuple
 #num t_list
-#num t_set
+#num t_disjoint_set
 #num t_graph
 #num t_node
 #num t_attribute

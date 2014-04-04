@@ -20,17 +20,18 @@ Library
   Exposed-modules:
     CVSU.Types
     CVSU.C.Types
+    CVSU.TypedPointer
     CVSU.List
     CVSU.Set
     CVSU.Graph
     CVSU.PixelImage
     CVSU.ConnectedComponents
     CVSU.Integral
-    CVSU.Edges
+    --CVSU.Edges
     CVSU.QuadForest
-    CVSU.TemporalForest
-    CVSU.Segmentation
-    CVSU.Parsing
+    --CVSU.TemporalForest
+    --CVSU.Segmentation
+    --CVSU.Parsing
     CVSU.Moments
   Other-Modules:
     CVSU.Bindings.Types
@@ -41,12 +42,12 @@ Library
     CVSU.Bindings.PixelImage
     CVSU.Bindings.ConnectedComponents
     CVSU.Bindings.Integral
-    CVSU.Bindings.Edges
+    --CVSU.Bindings.Edges
     CVSU.Bindings.QuadForest
-    CVSU.Bindings.BackgroundForest
-    CVSU.Bindings.TemporalForest
-    CVSU.Bindings.Segmentation
-    CVSU.Bindings.Parsing
+    --CVSU.Bindings.BackgroundForest
+    --CVSU.Bindings.TemporalForest
+    --CVSU.Bindings.Segmentation
+    --CVSU.Bindings.Parsing
   Extensions:
     ForeignFunctionInterface
   Build-Depends:

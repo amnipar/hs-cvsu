@@ -96,7 +96,7 @@ import Foreign.C.Types
 
 #ccall graph_free , Ptr <graph> -> IO ()
 
-#ccall graph_create , Ptr <graph> -> CULong -> CULong -> Ptr <attribute>
+#ccall graph_create , Ptr <graph> -> CULong -> CULong -> Ptr <attribute> \
     -> IO <result>
 
 #ccall graph_destroy , Ptr <graph> -> IO ()
