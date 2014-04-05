@@ -11,22 +11,25 @@ module CVSU.Graph
 ) where
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.List
 import CVSU.Bindings.Graph
 
 import CVSU.Types
 import CVSU.TypedPointer
+import CVSU.List
 import CVSU.PixelImage
 
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
+import Foreign.Marshal.Utils
 import Foreign.Concurrent
 
 data Attribute a =
   NoSuchAttribute |
   Attribute
   { attributePtr :: !(ForeignPtr C'attribute)
-  , attributeId :: Int
+  , attributeKey :: Int
   , attributeValue :: a
   }
 
@@ -46,10 +49,10 @@ attributeCreate attrKey attrValue = do
       r <- c'attribute_create pattr (fromIntegral attrKey) ptptr
       if r /= c'SUCCESS
         then error $ "Failed to create attribute with " ++ (show r)
-        else attributeFromPtr fattr
+        else attributeFromFPtr fattr
 
-attributeFromPtr :: Pointable a => ForeignPtr C'attribute -> IO (Attribute a)
-attributeFromPtr fattr =
+attributeFromFPtr :: Pointable a => ForeignPtr C'attribute -> IO (Attribute a)
+attributeFromFPtr fattr =
   withForeignPtr fattr $ \pattr -> do
     C'attribute{
       c'attribute'key = k,
@@ -58,10 +61,31 @@ attributeFromPtr fattr =
     v <- convertFrom tptr
     return $ Attribute fattr (fromIntegral k) v
 
+-- | Creates an attribute from a ptr; should be used only for attributes from
+--   nodes and other elements, that don't need to be freed.
+attributeFromPtr :: Pointable a => Ptr C'attribute -> IO (Attribute a)
+attributeFromPtr pattr = do
+  C'attribute{
+    c'attribute'key = k,
+    c'attribute'value = tptr
+  } <- peek pattr
+  v <- convertFrom tptr
+  -- no need to free attributes from elements
+  fattr <- newForeignPtr pattr (c'attribute_free nullPtr)
+  return $ Attribute fattr (fromIntegral k) v
+
+attributeFromList :: Pointable a => Int -> Ptr C'attribute_list
+    -> IO (Attribute a)
+attributeFromList key pattrlist = do
+  pattr <- c'attribute_find pattrlist (fromIntegral key)
+  if pattr /= nullPtr
+     then attributeFromPtr pattr
+     else return NoSuchAttribute
+
 instance (Eq a) => Eq (Attribute a) where
   (==) a b
     | a == NoSuchAttribute || b == NoSuchAttribute = False
-    | otherwise = (attributeId a == attributeId b) && 
+    | otherwise = (attributeKey a == attributeKey b) && 
                   (attributeValue a == attributeValue b)
 
 -- | In order to be usable as attributes, a type must provide conversions from
@@ -97,12 +121,34 @@ attributeCompare attrLabel attrEqual a b =
 -}
 data Node a =
   Node
-  { nodePtr :: !(ForeignPtr C'node)
+  { nodePtr :: !(Ptr C'node)
   , nodePosition :: (Double, Double)
   , nodeOrientation :: Double
   , nodeScale :: Int
   , nodeAttribute :: Attribute a
   } deriving Eq
+
+instance (Show a) => Show (Node a) where
+  show (Node _ (x,y) _ _ (Attribute _ key val)) = show (x,y,val)
+
+nodeFromPtr :: Pointable a => Int -> Ptr C'node -> IO (Node a)
+nodeFromPtr key pnode
+  | pnode == nullPtr = return $ Node nullPtr (0,0) 0 0 NoSuchAttribute
+  | otherwise        = do
+    (C'node x y o s attrs _) <- peek pnode
+    with attrs $ \pattrs -> do
+      attr <- attributeFromList key pattrs
+      return $ Node pnode 
+          (realToFrac x, realToFrac y)
+          (realToFrac o)
+          (fromIntegral s)
+          attr
+
+nodeFromListItem :: Pointable a => Int -> Ptr C'list_item -> IO (Node a)
+nodeFromListItem key pitem = do
+  item <- peek pitem
+  --pnode <- peek $ 
+  nodeFromPtr key $ castPtr $ c'list_item'data item
 
 --nodeLinks :: Node -> [Link]
 --nodeNeighbors :: Node -> [Node]
@@ -145,8 +191,8 @@ graphAlloc = do
     else error "Memory allocation failed in graphAlloc"
 
 -- | Creates an empty graph. In the underlying structure, memory will be
--- allocated for the given amount of nodes and links.
-graphCreate :: Int -> Int -> Attribute a -> IO (Graph a)
+--   allocated for the given amount of nodes and links.
+graphCreate :: Pointable a => Int -> Int -> Attribute a -> IO (Graph a)
 graphCreate nodeSize linkSize attrLabel = do
   fgraph <- graphAlloc
   withForeignPtr fgraph $ \pgraph ->
@@ -157,14 +203,17 @@ graphCreate nodeSize linkSize attrLabel = do
                pattr
       if r /= c'SUCCESS
         then error $ "Failed to create graph with " ++ (show r)
-        else graphFromPtr fgraph
+        else graphFromPtr fgraph (attributeKey attrLabel)
 
-graphFromPtr :: ForeignPtr C'graph -> IO (Graph a)
-graphFromPtr fgraph = return $ Graph fgraph [] []
+graphFromPtr :: Pointable a => ForeignPtr C'graph -> Int -> IO (Graph a)
+graphFromPtr fgraph key =
+  withForeignPtr fgraph $ \pgraph -> do
+    nodes <- createList (p'graph'nodes pgraph) (nodeFromListItem key)
+    return $ Graph fgraph nodes []
 
--- | Creates a regular grid graph from an image. The step in pixels between grid
--- rows and cols can be given, like also the neighborhood type and the label for
--- the attribute that will be used for storing the pixel values.
+-- | Creates a regular grid graph from an image. The step in pixels between 
+--   grid rows and cols can be given, like also the neighborhood type and the
+--   label for the attribute that will be used for storing the pixel values.
 graphFromImage :: (Num a, Pointable a) => PixelImage -> Int -> Int -> Int
     -> Int -> GraphNeighborhood -> Attribute a -> IO (Graph a)
 graphFromImage image offsetx offsety stepx stepy neighborhood attrLabel = do
@@ -183,4 +232,4 @@ graphFromImage image offsetx offsety stepx stepy neighborhood attrLabel = do
                  pattr
         if r /= c'SUCCESS
           then error $ "Failed to create graph from image with " ++ (show r)
-          else graphFromPtr fgraph
+          else graphFromPtr fgraph (attributeKey attrLabel)

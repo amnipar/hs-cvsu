@@ -54,12 +54,15 @@ findConnectedComponents :: Eq a => Int -> Int -> Graph a -> Graph (a,Set)
 findConnectedComponents valueAttr setAttr (Graph p nodes links) =
   Graph p (snd.mapAccumL (unionWithSimilarNeighbor valueAttr setAttr) 1 nodes) links
   -}
+
+valueGraph :: PixelImage -> Attribute Int -> IO (Graph Int)
+valueGraph pimg value = graphFromImage pimg 5 5 8 8 Neighborhood4 value
+
 main = do
   (sourceFile, targetFile) <- readArgs
   img <- expectFloatGrey =<< readFromFile sourceFile
   pimg <- toPixelImage $ threshold MaxAndZero 127 $ unsafeImageTo8Bit img
   value <- valueAttribute
-  g <- graphFromImage pimg 0 0 1 1 Neighborhood4 value
-  saveImage targetFile img
-  print "ok"
+  g <- valueGraph pimg value
+  saveImage targetFile $ drawGraphGray g img
   --cg <- findConnectedComponents binaryValue componentLabel g

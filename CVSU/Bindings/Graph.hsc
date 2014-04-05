@@ -37,6 +37,7 @@ import Foreign.C.Types
 
 #starttype attribute_list
 #field items , Ptr <attribute>
+#field size  , CULong
 #field count , CULong
 #stoptype
 
@@ -52,7 +53,8 @@ import Foreign.C.Types
 
 #ccall attribute_list_is_null , Ptr <attribute_list> -> IO <truth_value>
 
-#ccall attribute_add , Ptr <attribute_list> -> Ptr <attribute> -> IO (<result>)
+#ccall attribute_add , Ptr <attribute_list> -> Ptr <attribute> \
+    -> Ptr (Ptr <attribute>) -> IO (<result>)
 
 #ccall attribute_find , Ptr <attribute_list> -> CULong -> IO (Ptr <attribute>)
 
@@ -63,7 +65,6 @@ import Foreign.C.Types
 #field scale       , CULong
 #field attributes  , <attribute_list>
 #field links       , <attribute_list>
-#field bonds       , <attribute_list>
 #stoptype
 
 #starttype link
@@ -85,6 +86,14 @@ import Foreign.C.Types
 #field links   , <list>
 #field sources , <attribute_list>
 #stoptype
+
+#ccall node_create , Ptr <node> -> CULong -> CULong -> IO (<result>)
+
+#ccall node_destroy , Ptr <node> -> IO ()
+
+#ccall node_nullify , Ptr <node> -> IO ()
+
+#ccall node_is_null , Ptr <node> -> IO (<truth_value>)
 
 #integral_t graph_neighborhood
 #num NEIGHBORHOOD_0
