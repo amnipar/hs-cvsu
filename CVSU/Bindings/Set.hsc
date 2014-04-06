@@ -11,8 +11,7 @@ import Foreign.Ptr
 import Foreign.C.Types
 
 #starttype disjoint_set
-#field parent , Ptr <disjoint_set>
-#field id , CULong
+#field id , Ptr <disjoint_set>
 #field rank , CULong
 #stoptype
 
@@ -22,11 +21,13 @@ import Foreign.C.Types
 
 #ccall disjoint_set_nullify , Ptr <disjoint_set> -> IO ()
 
-#ccall disjoint_set_is_null , Ptr <disjoint_set> -> IO <truth_value>
+#ccall disjoint_set_is_null , Ptr <disjoint_set> -> IO (<truth_value>)
 
-#ccall disjoint_set_create , Ptr <disjoint_set> -> CULong -> IO ()
+#ccall disjoint_set_create , Ptr <disjoint_set> -> IO ()
 
 #ccall disjoint_set_union , Ptr <disjoint_set> -> Ptr <disjoint_set> \
   -> IO (Ptr <disjoint_set>)
 
 #ccall disjoint_set_find , Ptr <disjoint_set> -> IO (Ptr <disjoint_set>)
+
+#ccall disjoin_set_id , Ptr <disjoint_set> -> IO (CULong)

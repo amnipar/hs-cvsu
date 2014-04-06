@@ -29,10 +29,38 @@ import Foreign.Marshal.Utils
 import Foreign.Concurrent
 import System.IO.Unsafe
 
+class (Pointable a) => AttribValue a where
+  type Key a :: *
+  data Attribute a
+
+-- | A class for types that can be equipped with attributes
+class Attributable a where
+  type Origin a :: *
+  createEmpty :: Origin a -> IO (a ())
+  createWithValue :: (AttribValue b) => Key b -> b -> Origin a -> IO (a b)
+  createWithAttrib :: (AttribValue b) => Attribute b -> Origin a -> IO (a b)
+
+class (AttribValue e) => Expandable e where
+  type Source e :: *
+  type Target e :: a -> *
+  extendWithAttrib :: (AttribValue a) => (e a) -> Source e -> Target e a
+
+{-
+how should this work?
+
+-there are many entities that can have attribs: graphs, nodes, links, heads.
+-some of the attribs may be 'hidden'.
+-we may 'declare' attribs for elems and they are retrieved if present.
+-we may add new attribs and extend elems with attribs with new attribs.
+-certain operations 'expect' certain attribs and these are declared in type
+ signatures.
+(Expandable a) => Graph a -> Attribute Set -> Graph (Target e Set)
+-}
+
 class Attributable a where
   type Key a :: *
   data Attribute a
-  attributePtr :: Attribute a -> (ForeignPtr C'attribute)
+  --attributePtr :: Attribute a -> (ForeignPtr C'attribute)
   attributeKey :: Attribute a -> Key a
   attributeValue :: Attribute a -> a
   nullAttribute :: Key a -> Attribute a
@@ -56,18 +84,46 @@ instance (Pointable a) => Attributable a where
   type Key a = Int
   data Attribute a = 
     NoSuchAttribute |
-    PointableAttribute
-    { pptr :: !(ForeignPtr C'attribute)
-    , pkey :: Key a
-    , pvalue :: a
+    PAttribute
+    { pointablePtr :: !(ForeignPtr C'attribute)
+    , pointableKey :: Key a
+    , pointableValue :: a
     }
-  attributePtr a = pptr a
-  attributeKey a = pkey a
-  attributeValue a = pvalue a
+  --attributePtr a = pptr a
+  attributeKey a = pointableKey a
+  attributeValue a = pointableValue a
   nullAttribute _ = NoSuchAttribute
-  nullKey a = (pkey a) == 0
+  nullKey a = (pointableKey a) == 0
   createFrom = attributeCreate
   convertFrom = attributeFromList
+
+instance (Attributable a, b) => Attributable (a,b) where
+  type Key (a,b) = (Int,Int)
+  newtype Attribute (a,b) = (Attribute a, Attribute b)
+  attributeKey (a,b) = (attributeKey a, attributeKey b)
+  attributeValue (a,b) = (attributeValue a, attributeValue b)
+  nullAttribute (k1,k2) = (nullAttribute k1, nullAttribute k2)
+  nullKey (a,b) = k1 == 0 || k2 == 0
+    where (k1,k2) = attributeKey (a,b)
+  createFrom (k1,k2) (v1,v2) = do
+    a1 <- createFrom k1 v1
+    a2 <- createFrom k2 v2
+    return $ (a1,a2)
+  convertFrom (k1,k2) p = do
+    a1 <- convertFrom k1 p
+    a2 <- convertFrom k2 p
+    return (a1,a2)
+
+class Extendable e where
+  type Source e :: *
+  type Target e :: *
+  extend :: e -> Source e -> Target e
+
+instance (Pointable e) => Extendable e where
+  type Source e = PAttribute
+  type Target e = (PAttribute,PAttribute)
+  extend :: PAttribute -> PAttribute -> (PAttribute,PAttribute)
+  
 
 attributeAlloc :: IO (ForeignPtr C'attribute)
 attributeAlloc = do
