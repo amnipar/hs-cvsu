@@ -136,6 +136,8 @@ data TypedPointer =
   }
 -}
 
+nullTypedPointer = newForeignPtr nullPtr (c'typed_pointer_free nullPtr)
+
 typedPointerAlloc :: IO (ForeignPtr C'typed_pointer)
 typedPointerAlloc = do
   ptr <- c'typed_pointer_alloc
@@ -154,16 +156,22 @@ typedPointerCreate l c t p = do
       else return ftptr
 
 class Pointable a where
-  fromTypedPointer :: ForeignPtr C'typed_pointer -> IO a
-  fromTypedPointer ftptr =
+  fromFTypedPointer :: ForeignPtr C'typed_pointer -> IO a
+  fromFTypedPointer ftptr =
     withForeignPtr ftptr $ \ptptr -> do
       tptr <- peek ptptr
-      convertFrom tptr
-  convertFrom :: C'typed_pointer -> IO a
-  intoTypedPointer :: a -> IO (ForeignPtr C'typed_pointer)
+      fromTypedPointer tptr
+  fromTypedPointer :: C'typed_pointer -> IO a
+  intoFTypedPointer :: a -> IO (ForeignPtr C'typed_pointer)
+  nullPointable :: a
+
+instance Pointable () where
+  fromFTypedPointer _ = return ()
+  intoFTypedPointer _ = nullTypedPointer
+  nullPointable = ()
 
 instance Pointable (Int) where
-  convertFrom (C'typed_pointer l c t v)
+  fromTypedPointer (C'typed_pointer l c t v)
     | l == c't_S8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CSChar)
     | l == c't_U8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CUChar)
     | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CShort)
@@ -172,10 +180,10 @@ instance Pointable (Int) where
     | l == c't_U32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CULong)
     | otherwise    = error $ 
         "Unable to convert " ++ (showTypeLabel l) ++ " to Int"
-  intoTypedPointer i = do
+  intoFTypedPointer i = do
       let
         value :: CLong
         value = fromIntegral i
       with value $ \pvalue -> typedPointerCreate c't_S32 1 0 (castPtr pvalue)
-
+  nullPointable = 0
 --instance Pointable (Float) where

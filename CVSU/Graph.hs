@@ -1,5 +1,8 @@
+{-#LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts, 
+            UndecidableInstances #-}
 module CVSU.Graph
-( Attribute(..)
+( Attributable(..)
+, Attribute(..)
 , attributeCreate
 -- , attributeLabel
 , Node(..)
@@ -24,14 +27,47 @@ import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
 import Foreign.Marshal.Utils
 import Foreign.Concurrent
+import System.IO.Unsafe
 
-data Attribute a =
-  NoSuchAttribute |
-  Attribute
-  { attributePtr :: !(ForeignPtr C'attribute)
-  , attributeKey :: Int
-  , attributeValue :: a
-  }
+class Attributable a where
+  type Key a :: *
+  data Attribute a
+  attributePtr :: Attribute a -> (ForeignPtr C'attribute)
+  attributeKey :: Attribute a -> Key a
+  attributeValue :: Attribute a -> a
+  nullAttribute :: Key a -> Attribute a
+  nullKey :: Attribute a -> Bool
+  createFrom :: (Key a) -> a -> IO (Attribute a)
+  convertFrom :: (Key a) -> Ptr C'attribute_list -> IO (Attribute a)
+
+nullAttrPtr = unsafePerformIO $ newForeignPtr nullPtr (c'attribute_free nullPtr)
+{-
+instance Attributable () where
+  type Key () = ()
+  data Attribute () = NoSuchAttribute
+  attributePtr _ = nullAttrPtr
+  attributeKey _ = ()
+  attributeValue _ = ()
+  createFrom _ _ = return NoSuchAttribute
+  convertFrom _ _ = return NoSuchAttribute
+-}
+
+instance (Pointable a) => Attributable a where
+  type Key a = Int
+  data Attribute a = 
+    NoSuchAttribute |
+    PointableAttribute
+    { pptr :: !(ForeignPtr C'attribute)
+    , pkey :: Key a
+    , pvalue :: a
+    }
+  attributePtr a = pptr a
+  attributeKey a = pkey a
+  attributeValue a = pvalue a
+  nullAttribute _ = NoSuchAttribute
+  nullKey a = (pkey a) == 0
+  createFrom = attributeCreate
+  convertFrom = attributeFromList
 
 attributeAlloc :: IO (ForeignPtr C'attribute)
 attributeAlloc = do
@@ -42,7 +78,7 @@ attributeAlloc = do
 
 attributeCreate :: Pointable a => Int -> a -> IO (Attribute a)
 attributeCreate attrKey attrValue = do
-  ftptr <- intoTypedPointer attrValue
+  ftptr <- intoFTypedPointer attrValue
   fattr <- attributeAlloc
   withForeignPtr fattr $ \pattr ->
     withForeignPtr ftptr $ \ptptr -> do
@@ -58,8 +94,8 @@ attributeFromFPtr fattr =
       c'attribute'key = k,
       c'attribute'value = tptr
     } <- peek pattr
-    v <- convertFrom tptr
-    return $ Attribute fattr (fromIntegral k) v
+    v <- fromTypedPointer tptr
+    return $ PointableAttribute fattr (fromIntegral k) v
 
 -- | Creates an attribute from a ptr; should be used only for attributes from
 --   nodes and other elements, that don't need to be freed.
@@ -69,32 +105,30 @@ attributeFromPtr pattr = do
     c'attribute'key = k,
     c'attribute'value = tptr
   } <- peek pattr
-  v <- convertFrom tptr
+  v <- fromTypedPointer tptr
   -- no need to free attributes from elements
   fattr <- newForeignPtr pattr (c'attribute_free nullPtr)
-  return $ Attribute fattr (fromIntegral k) v
+  return $ PointableAttribute fattr (fromIntegral k) v
 
 attributeFromList :: Pointable a => Int -> Ptr C'attribute_list
     -> IO (Attribute a)
-attributeFromList key pattrlist = do
-  pattr <- c'attribute_find pattrlist (fromIntegral key)
-  if pattr /= nullPtr
-     then attributeFromPtr pattr
-     else return NoSuchAttribute
+attributeFromList key pattrlist 
+  | key == 0  = return $ nullAttribute key
+  | otherwise = do
+    pattr <- c'attribute_find pattrlist (fromIntegral key)
+    if pattr /= nullPtr
+      then attributeFromPtr pattr
+      else return $ nullAttribute key
 
-instance (Eq a) => Eq (Attribute a) where
+instance (Attributable a, Eq a, Eq (Key a)) => Eq (Attribute a) where
   (==) a b
-    | a == NoSuchAttribute || b == NoSuchAttribute = False
+    | nullKey a || nullKey b = False
     | otherwise = (attributeKey a == attributeKey b) && 
                   (attributeValue a == attributeValue b)
 
 -- | In order to be usable as attributes, a type must provide conversions from
 --   and to typed pointers.
-{-
-class Attributable a where
-  convertTo :: C'typed_pointer -> IO a
-  convertFrom :: a -> IO C'typed_pointer
-  -}
+
 -- | Creates an attribute label. This is used for declaring the typeclass of
 --   the attributes for use in functions.
 --attributeLabel :: Int -> a -> IO (Attribute a)
@@ -128,23 +162,26 @@ data Node a =
   , nodeAttribute :: Attribute a
   } deriving Eq
 
-instance (Show a) => Show (Node a) where
-  show (Node _ (x,y) _ _ (Attribute _ key val)) = show (x,y,val)
+instance (Show a, Attributable a) => Show (Node a) where
+  show (Node _ (x,y) _ _ a) = show (x,y,attributeValue a)
 
-nodeFromPtr :: Pointable a => Int -> Ptr C'node -> IO (Node a)
+nodeNull :: Attributable a => Key a -> Node a
+nodeNull key = Node nullPtr (0,0) 0 0 $ nullAttribute key
+
+nodeFromPtr :: Attributable a => Key a -> Ptr C'node -> IO (Node a)
 nodeFromPtr key pnode
-  | pnode == nullPtr = return $ Node nullPtr (0,0) 0 0 NoSuchAttribute
+  | pnode == nullPtr = return $ nodeNull key
   | otherwise        = do
     (C'node x y o s attrs _) <- peek pnode
     with attrs $ \pattrs -> do
-      attr <- attributeFromList key pattrs
+      attr <- convertFrom key pattrs
       return $ Node pnode 
           (realToFrac x, realToFrac y)
           (realToFrac o)
           (fromIntegral s)
           attr
 
-nodeFromListItem :: Pointable a => Int -> Ptr C'list_item -> IO (Node a)
+nodeFromListItem :: Attributable a => Key a -> Ptr C'list_item -> IO (Node a)
 nodeFromListItem key pitem = do
   item <- peek pitem
   --pnode <- peek $ 
@@ -155,11 +192,29 @@ nodeFromListItem key pitem = do
 
 data Link =
   Link
-  { linkPtr :: !(ForeignPtr C'link)
-  , linkHead :: !(ForeignPtr C'link_head)
+  { linkPtr :: !(Ptr C'link)
+  , linkHead :: !(Ptr C'link_head)
   , linkWeight :: Double
+  , linkFrom :: Node ()
+  , linkTo :: Node ()
   -- , linkAttribute :: a
   } deriving Eq
+
+linkFromPtr :: Ptr C'link -> IO (Link)
+linkFromPtr plink
+  | plink == nullPtr = return $ 
+      Link nullPtr nullPtr 0 (nodeNull 0) (nodeNull 0)
+  | otherwise        = do
+    (C'link a b w attrlist) <- peek plink
+    nodea <- nodeFromPtr 0 $ c'link_head'origin a
+    nodeb <- nodeFromPtr 0 $ c'link_head'origin b
+    return $ Link plink nullPtr (realToFrac w) nodea nodeb
+
+-- add key and attributable
+linkFromListItem :: Ptr C'list_item -> IO (Link)
+linkFromListItem pitem = do
+  item <- peek pitem
+  linkFromPtr $ castPtr $ c'list_item'data item
 
 --linkGetOrigin :: Link -> Node
 
@@ -192,7 +247,7 @@ graphAlloc = do
 
 -- | Creates an empty graph. In the underlying structure, memory will be
 --   allocated for the given amount of nodes and links.
-graphCreate :: Pointable a => Int -> Int -> Attribute a -> IO (Graph a)
+graphCreate :: Attributable a => Int -> Int -> Attribute a -> IO (Graph a)
 graphCreate nodeSize linkSize attrLabel = do
   fgraph <- graphAlloc
   withForeignPtr fgraph $ \pgraph ->
@@ -205,16 +260,17 @@ graphCreate nodeSize linkSize attrLabel = do
         then error $ "Failed to create graph with " ++ (show r)
         else graphFromPtr fgraph (attributeKey attrLabel)
 
-graphFromPtr :: Pointable a => ForeignPtr C'graph -> Int -> IO (Graph a)
+graphFromPtr :: Attributable a => ForeignPtr C'graph -> Int -> IO (Graph a)
 graphFromPtr fgraph key =
   withForeignPtr fgraph $ \pgraph -> do
     nodes <- createList (p'graph'nodes pgraph) (nodeFromListItem key)
-    return $ Graph fgraph nodes []
+    links <- createList (p'graph'links pgraph) (linkFromListItem) -- key
+    return $ Graph fgraph nodes links
 
 -- | Creates a regular grid graph from an image. The step in pixels between 
 --   grid rows and cols can be given, like also the neighborhood type and the
 --   label for the attribute that will be used for storing the pixel values.
-graphFromImage :: (Num a, Pointable a) => PixelImage -> Int -> Int -> Int
+graphFromImage :: (Num a, Attributable a) => PixelImage -> Int -> Int -> Int
     -> Int -> GraphNeighborhood -> Attribute a -> IO (Graph a)
 graphFromImage image offsetx offsety stepx stepy neighborhood attrLabel = do
   fgraph <- graphAlloc

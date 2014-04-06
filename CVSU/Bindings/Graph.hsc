@@ -13,7 +13,7 @@ import CVSU.Bindings.PixelImage
 import Foreign.Ptr
 import Foreign.C.Types
 
--- attribute type and functions
+-- attribute structure and functions
 
 #starttype attribute
 #field key   , CULong
@@ -33,7 +33,7 @@ import Foreign.C.Types
 
 #ccall attribute_is_null , Ptr <attribute> -> IO (<truth_value>)
 
--- attribute_list type and functions
+-- attribute_list structure and functions
 
 #starttype attribute_list
 #field items , Ptr <attribute>
@@ -58,14 +58,7 @@ import Foreign.C.Types
 
 #ccall attribute_find , Ptr <attribute_list> -> CULong -> IO (Ptr <attribute>)
 
-#starttype node
-#field x           , CDouble
-#field y           , CDouble
-#field orientation , CDouble
-#field scale       , CULong
-#field attributes  , <attribute_list>
-#field links       , <attribute_list>
-#stoptype
+-- link structures and functions
 
 #starttype link
 #field a          , <link_head>
@@ -81,10 +74,33 @@ import Foreign.C.Types
 #field attributes , <attribute_list>
 #stoptype
 
-#starttype graph
-#field nodes   , <list>
-#field links   , <list>
-#field sources , <attribute_list>
+#starttype link_list
+#field items , Ptr <link_head>
+#field size  , CULong
+#field count , CULong
+#stoptype
+
+#ccall link_list_alloc , IO (Ptr <link_list>)
+
+#ccall link_list_free , Ptr <link_list> -> IO ()
+
+#ccall link_list_create , Ptr <link_list> -> CULong -> IO (<result>)
+
+#ccall link_list_destroy , Ptr <link_list> -> IO ()
+
+#ccall link_list_nullify , Ptr <link_list> -> IO ()
+
+#ccall link_list_is_null , Ptr <link_list> -> IO (<truth_value>)
+
+-- node structure and functions
+
+#starttype node
+#field x           , CDouble
+#field y           , CDouble
+#field orientation , CDouble
+#field scale       , CULong
+#field attributes  , <attribute_list>
+#field links       , <link_list>
 #stoptype
 
 #ccall node_create , Ptr <node> -> CULong -> CULong -> IO (<result>)
@@ -94,6 +110,14 @@ import Foreign.C.Types
 #ccall node_nullify , Ptr <node> -> IO ()
 
 #ccall node_is_null , Ptr <node> -> IO (<truth_value>)
+
+-- graph structure and functions
+
+#starttype graph
+#field nodes   , <list>
+#field links   , <list>
+#field sources , <attribute_list>
+#stoptype
 
 #integral_t graph_neighborhood
 #num NEIGHBORHOOD_0
