@@ -30,4 +30,4 @@ import Foreign.C.Types
 
 #ccall disjoint_set_find , Ptr <disjoint_set> -> IO (Ptr <disjoint_set>)
 
-#ccall disjoin_set_id , Ptr <disjoint_set> -> IO (CULong)
+#ccall disjoint_set_id , Ptr <disjoint_set> -> IO (CULong)

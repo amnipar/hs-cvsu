@@ -1,5 +1,9 @@
 module CVSU.TypedPointer
-( Pointable(..)
+( PointableType(..)
+, showPointableType
+, typedPointerNull
+, typedPointerCreate
+, Pointable(..)
 ) where
 
 import CVSU.Bindings.TypedPointer
@@ -14,91 +18,91 @@ import Foreign.Concurrent
 
 import Control.Monad (liftM)
 
-data TypeLabel =
-  LabelUndef |
-  LabelType |
-  LabelTruthValue |
-  LabelPointer |
-  LabelTypedPointer |
-  LabelString |
-  LabelCS8 |
-  LabelCU8 |
-  LabelCS16 |
-  LabelCU16 |
-  LabelCS32 |
-  LabelCU32 |
-  LabelCF32 |
-  LabelCF64 |
-  LabelTuple |
-  LabelList |
-  LabelSet |
-  LabelGraph |
-  LabelNode |
-  LabelAttribute |
-  LabelAttributeList |
-  LabelLink |
-  LabelLinkHead |
-  LabelStatistics |
-  LabelPixelImage deriving (Eq,Show)
+data PointableType =
+  PUndef |
+  PType |
+  PTruth |
+  PPointer |
+  PPointable |
+  PString |
+  PCSChar |
+  PCUChar |
+  PCShort |
+  PCUShort |
+  PCInt |
+  PCUInt |
+  PCFloat |
+  PCDouble |
+  PTuple |
+  PList |
+  PSet |
+  PGraph |
+  PNode |
+  PAttribute |
+  PAttributeList |
+  PLink |
+  PLinkHead |
+  PStatistics |
+  PPixelImage deriving (Eq,Show)
 
-cTypeLabel :: TypeLabel -> C'type_label
+cTypeLabel :: PointableType -> C'type_label
 cTypeLabel l
-  | l == LabelUndef = c't_UNDEF
-  | l == LabelType = c't_type
-  | l == LabelTruthValue = c't_truth_value
-  | l == LabelPointer = c't_pointer
-  | l == LabelTypedPointer = c't_typed_pointer
-  | l == LabelString = c't_string
-  | l == LabelCS8 = c't_S8
-  | l == LabelCU8 = c't_U8
-  | l == LabelCS16 = c't_S16
-  | l == LabelCU16 = c't_U16
-  | l == LabelCS32 = c't_S32
-  | l == LabelCU32 = c't_U32
-  | l == LabelCF32 = c't_F32
-  | l == LabelCF64 = c't_F64
-  | l == LabelTuple = c't_tuple
-  | l == LabelList = c't_list
-  | l == LabelSet = c't_disjoint_set
-  | l == LabelGraph = c't_graph
-  | l == LabelNode = c't_node
-  | l == LabelAttribute = c't_attribute
-  | l == LabelAttributeList = c't_attribute_list
-  | l == LabelLink = c't_link
-  | l == LabelLinkHead = c't_link_head
-  | l == LabelStatistics = c't_statistics
-  | l == LabelPixelImage = c't_pixel_image
+  | l == PUndef         = c't_UNDEF
+  | l == PType          = c't_type
+  | l == PTruth         = c't_truth_value
+  | l == PPointer       = c't_pointer
+  | l == PPointable     = c't_typed_pointer
+  | l == PString        = c't_string
+  | l == PCSChar        = c't_S8
+  | l == PCUChar        = c't_U8
+  | l == PCShort        = c't_S16
+  | l == PCUShort       = c't_U16
+  | l == PCInt          = c't_S32
+  | l == PCUInt         = c't_U32
+  | l == PCFloat        = c't_F32
+  | l == PCDouble       = c't_F64
+  | l == PTuple         = c't_tuple
+  | l == PList          = c't_list
+  | l == PSet           = c't_disjoint_set
+  | l == PGraph         = c't_graph
+  | l == PNode          = c't_node
+  | l == PAttribute     = c't_attribute
+  | l == PAttributeList = c't_attribute_list
+  | l == PLink          = c't_link
+  | l == PLinkHead      = c't_link_head
+  | l == PStatistics    = c't_statistics
+  | l == PPixelImage    = c't_pixel_image
 
-hTypeLabel :: C'type_label -> TypeLabel
+hTypeLabel :: C'type_label -> PointableType
 hTypeLabel l
-  | l == c't_UNDEF = LabelUndef
-  | l == c't_type = LabelType
-  | l == c't_truth_value = LabelTruthValue
-  | l == c't_pointer = LabelPointer
-  | l == c't_typed_pointer = LabelTypedPointer
-  | l == c't_string = LabelString
-  | l == c't_S8 = LabelCS8
-  | l == c't_U8 = LabelCU8
-  | l == c't_S16 = LabelCS16
-  | l == c't_U16 = LabelCU16
-  | l == c't_S32 = LabelCS32
-  | l == c't_U32 = LabelCU32
-  | l == c't_F32 = LabelCF32
-  | l == c't_F64 = LabelCF64
-  | l == c't_tuple = LabelTuple
-  | l == c't_list = LabelList
-  | l == c't_disjoint_set = LabelSet
-  | l == c't_graph = LabelGraph
-  | l == c't_node = LabelNode
-  | l == c't_attribute = LabelAttribute
-  | l == c't_attribute_list = LabelAttributeList
-  | l == c't_link = LabelLink
-  | l == c't_link_head = LabelLinkHead
-  | l == c't_statistics = LabelStatistics
-  | l == c't_pixel_image = LabelPixelImage
+  | l == c't_UNDEF          = PUndef
+  | l == c't_type           = PType
+  | l == c't_truth_value    = PTruth
+  | l == c't_pointer        = PPointer
+  | l == c't_typed_pointer  = PPointable
+  | l == c't_string         = PString
+  | l == c't_S8             = PCSChar
+  | l == c't_U8             = PCUChar
+  | l == c't_S16            = PCShort
+  | l == c't_U16            = PCUShort
+  | l == c't_S32            = PCInt
+  | l == c't_U32            = PCUInt
+  | l == c't_F32            = PCFloat
+  | l == c't_F64            = PCDouble
+  | l == c't_tuple          = PTuple
+  | l == c't_list           = PList
+  | l == c't_disjoint_set   = PSet
+  | l == c't_graph          = PGraph
+  | l == c't_node           = PNode
+  | l == c't_attribute      = PAttribute
+  | l == c't_attribute_list = PAttributeList
+  | l == c't_link           = PLink
+  | l == c't_link_head      = PLinkHead
+  | l == c't_statistics     = PStatistics
+  | l == c't_pixel_image    = PPixelImage
 
-showTypeLabel :: C'type_label -> String
-showTypeLabel l
+showPointableType :: C'type_label -> String
+showPointableType l
     | l == c't_UNDEF =          "<undef>"
     | l == c't_type  =          "<type>"
     | l == c't_truth_value =    "<truth_value>"
@@ -136,7 +140,7 @@ data TypedPointer =
   }
 -}
 
-nullTypedPointer = newForeignPtr nullPtr (c'typed_pointer_free nullPtr)
+typedPointerNull = newForeignPtr nullPtr (c'typed_pointer_free nullPtr)
 
 typedPointerAlloc :: IO (ForeignPtr C'typed_pointer)
 typedPointerAlloc = do
@@ -156,34 +160,60 @@ typedPointerCreate l c t p = do
       else return ftptr
 
 class Pointable a where
-  fromFTypedPointer :: ForeignPtr C'typed_pointer -> IO a
-  fromFTypedPointer ftptr =
-    withForeignPtr ftptr $ \ptptr -> do
-      tptr <- peek ptptr
-      fromTypedPointer tptr
-  fromTypedPointer :: C'typed_pointer -> IO a
-  intoFTypedPointer :: a -> IO (ForeignPtr C'typed_pointer)
-  nullPointable :: a
-
+  pointableType :: a -> PointableType
+  pointableNull :: a
+  pointableFromF:: ForeignPtr C'typed_pointer -> IO a
+  pointableFromF ftptr =
+    withForeignPtr ftptr $ \ptptr ->
+      if ptptr /= nullPtr
+        then do
+          tptr <- peek ptptr
+          pointableFrom tptr
+        else return $ pointableNull
+  pointableFrom :: C'typed_pointer -> IO a
+  pointableInto :: a -> IO (ForeignPtr C'typed_pointer)
+{-
 instance Pointable () where
-  fromFTypedPointer _ = return ()
-  intoFTypedPointer _ = nullTypedPointer
-  nullPointable = ()
-
+  pointableType _ = PUndef
+  pointableNull = ()
+  pointableFromF _ = return ()
+  pointableFrom _ = return ()
+  pointableInto _ = typedPointerNull
+-}
 instance Pointable (Int) where
-  fromTypedPointer (C'typed_pointer l c t v)
+  pointableType _ = PCInt
+  pointableNull = 0
+  pointableFrom (C'typed_pointer l c t v)
+    | l == c't_S8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CSChar)
+    | l == c't_U8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CUChar)
+    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CShort)
+    | l == c't_U16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CUShort)
+    | l == c't_S32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CInt)
+    | l == c't_U32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CUInt)
+    | otherwise    = error $ 
+        "Unable to convert " ++ (showPointableType l) ++ " to Int"
+  pointableInto v = do
+    let
+      value :: CInt
+      value = fromIntegral v
+    with value $ \pvalue -> typedPointerCreate c't_S32 1 0 (castPtr pvalue)
+
+instance Pointable (Float) where
+  pointableType _ = PCFloat
+  pointableNull = 0
+  pointableFrom (C'typed_pointer l c t v)
     | l == c't_S8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CSChar)
     | l == c't_U8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CUChar)
     | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CShort)
     | l == c't_U16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CUShort)
     | l == c't_S32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CLong)
     | l == c't_U32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CULong)
-    | otherwise    = error $ 
-        "Unable to convert " ++ (showTypeLabel l) ++ " to Int"
-  intoFTypedPointer i = do
-      let
-        value :: CLong
-        value = fromIntegral i
-      with value $ \pvalue -> typedPointerCreate c't_S32 1 0 (castPtr pvalue)
-  nullPointable = 0
---instance Pointable (Float) where
+    | l == c't_F32 = liftM realToFrac   $ peek ((castPtr v)::Ptr CFloat)
+    | l == c't_F64 = liftM realToFrac   $ peek ((castPtr v)::Ptr CDouble)
+    | otherwise    = error $
+        "Unable to convert " ++ (showPointableType l) ++ " to Float"
+  pointableInto v = do
+    let
+      value :: CFloat
+      value = realToFrac v
+    with value $ \pvalue -> typedPointerCreate c't_F32 1 0 (castPtr pvalue)
