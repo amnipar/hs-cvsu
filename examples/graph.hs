@@ -1,22 +1,27 @@
+{-#LANGUAGE TypeFamilies#-}
 module Main where
 
 import CVSU.Types
 import CVSU.PixelImage hiding (writePixelImage)
 import CVSU.QuadForest
 import CVSU.Graph
+import CVSU.Set
 
 import CV.Image
 import CV.Thresholding
 import CV.CVSU
 import CV.CVSU.Drawing
 
+import Foreign.ForeignPtr
 import ReadArgs
 
 valueAttribute :: IO (Attribute Int)
 valueAttribute = attributeCreate 1 6
 
---componentLabel :: Attribute Set
---componentLabel = attributeCreate 2 $ Set 0
+componentAttribute :: IO (Attribute Set)
+componentAttribute = do
+  s <- setCreate
+  attributeCreate 2 s
 
 -- takes a label value and a node.
 -- if node has same value as neighbor, makes a union with neighbor
@@ -58,11 +63,26 @@ findConnectedComponents valueAttr setAttr (Graph p nodes links) =
 valueGraph :: PixelImage -> Attribute Int -> IO (Graph Int)
 valueGraph pimg value = graphFromImage pimg 5 5 8 8 Neighborhood4 value
 
+graphAddSet :: (AttribValue a, PAttribValue a ~ ForeignPtr b) =>
+    Attribute Set -> Graph a -> IO (Graph (a,Set))
+graphAddSet attrib (Graph pgraph nodes links) =
+  withForeignPtr (attribPtr attrib) $ \pattrib -> do
+    print "b"
+    nodes' <- mapM (extendWithAttrib attrib) nodes
+    print "c"
+    touchForeignPtr (attribPtr attrib)
+    return $ Graph pgraph nodes' links
+
 main = do
   (sourceFile, targetFile) <- readArgs
   img <- expectFloatGrey =<< readFromFile sourceFile
   pimg <- toPixelImage $ threshold MaxAndZero 127 $ unsafeImageTo8Bit img
   value <- valueAttribute
-  g <- valueGraph pimg value
-  saveImage targetFile $ drawGraphGray g img
+  comp <- componentAttribute
+  vgraph <- valueGraph pimg value
+  print "a"
+  sgraph <- graphAddSet comp vgraph
+  print "d"
+  saveImage targetFile $ drawGraphGray value vgraph img
+  print "e"
   --cg <- findConnectedComponents binaryValue componentLabel g

@@ -1,8 +1,9 @@
 module CVSU.Set
 ( Set(..)
-, createSet
-, union
-, find
+, setCreate
+, setUnion
+, setFind
+, setGetId
 ) where
 
 import CVSU.Bindings.Set
@@ -22,59 +23,76 @@ data Set =
   , setId :: Int
   }
 
-nullSetPtr = newForeignPtr nullPtr (c'disjoint_set_free nullPtr)
+setPtrNull :: IO (ForeignPtr C'disjoint_set)
+setPtrNull = newForeignPtr nullPtr (c'disjoint_set_free nullPtr)
 
-allocSet :: IO (ForeignPtr C'disjoint_set)
-allocSet = do
+setAlloc :: IO (ForeignPtr C'disjoint_set)
+setAlloc = do
   ptr <- c'disjoint_set_alloc
   if ptr /= nullPtr
      then newForeignPtr ptr (c'disjoint_set_free ptr)
      else error "Memory allocation failed in allocSet"
 
-createSet :: IO (Set)
-createSet = do
-  fset <- allocSet
+setCreate :: IO (Set)
+setCreate = do
+  fset <- setAlloc
   withForeignPtr fset $ \pset -> do
     c'disjoint_set_create pset
-    fptrToSet fset
+    setFromFPtr fset
 
-ptrToSet :: Ptr C'disjoint_set -> IO (Set)
-ptrToSet pset = do
+-- | For use when must _not_ free the pointer, i.e. when creating a linking to
+--   an object stored in c structures that will be destroyed by the structure
+--   destructors
+setFromPtr :: Ptr C'disjoint_set -> IO (Set)
+setFromPtr pset = do
   C'disjoint_set {
     c'disjoint_set'id = p,
     c'disjoint_set'rank = r
   } <- peek pset
-  fp <- newForeignPtr p (c'disjoint_set_free p)
+  fp <- newForeignPtr p (c'disjoint_set_free nullPtr)
   i <- c'disjoint_set_id p
   return $ Set fp (fromIntegral i)
 
-fptrToSet :: ForeignPtr C'disjoint_set -> IO Set
-fptrToSet fset = withForeignPtr fset $ \pset -> ptrToSet pset
+-- | For use when must free the pointer
+setFromFPtr :: ForeignPtr C'disjoint_set -> IO Set
+setFromFPtr fset = withForeignPtr fset $ \pset -> do
+  C'disjoint_set {
+  c'disjoint_set'id = p,
+  c'disjoint_set'rank = r
+  } <- peek pset
+  i <- c'disjoint_set_id p
+  return $ Set fset (fromIntegral i)
 
-union :: Set -> Set -> IO (Set)
-union s1 s2 =
+setUnion :: Set -> Set -> IO (Set)
+setUnion s1 s2 =
   withForeignPtr (setPtr s1) $ \ps1 ->
     withForeignPtr (setPtr s2) $ \ps2 -> do
       s3 <- c'disjoint_set_union ps1 ps2
-      ptrToSet s3
+      setFromPtr s3
 
-find :: Set -> IO (Set)
-find s =
+setFind :: Set -> IO (Set)
+setFind s =
   withForeignPtr (setPtr s) $ \ps -> do
     ps' <- c'disjoint_set_find ps
-    ptrToSet ps'
+    setFromPtr ps'
+
+setGetId :: Set -> IO Int
+setGetId set =
+  withForeignPtr (setPtr set) $ \pset -> do
+    i <- c'disjoint_set_id pset
+    return $ fromIntegral i
 
 instance Pointable (Set) where
   pointableType _ = PSet
   pointableNull = unsafePerformIO $ do
-    nptr <- nullSetPtr
+    nptr <- setPtrNull
     return $ Set nptr 0
   pointableFrom (C'typed_pointer l c t v)
-    | l == c't_disjoint_set = ptrToSet ((castPtr v)::Ptr C'disjoint_set)
+    | l == c't_disjoint_set = setFromPtr ((castPtr v)::Ptr C'disjoint_set)
     | otherwise             = error $
         "Unable to convert " ++ (showPointableType l) ++ " to Set"
   pointableInto s = do
-    fset <- allocSet
+    fset <- setAlloc
     withForeignPtr fset $ \pset -> do
       c'disjoint_set_create pset
       typedPointerCreate c't_disjoint_set 1 0 (castPtr pset)

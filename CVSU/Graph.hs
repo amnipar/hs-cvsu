@@ -1,4 +1,4 @@
-{-#LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts, 
+{-#LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts,
 UndecidableInstances, MultiParamTypeClasses, OverlappingInstances,
 ScopedTypeVariables#-}
 module CVSU.Graph
@@ -119,7 +119,7 @@ instance AttribValue Int where
               } <- peek pattr
               v <- pointableFrom tptr
               return $ PAttribInt(fattr, (fromIntegral k), v)
-  
+
   attribAdd attrib pattriblist = do
     withForeignPtr (attribPtr attrib) $ \pattrib -> do
       let
@@ -136,7 +136,7 @@ instance AttribValue Int where
             fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
             return $ PAttribInt(fattrib, (fromIntegral k), v)
           else attribCreateNull
-  
+
   attribGet attrib pattriblist
     | attribKey attrib == 0  = attribCreateNull
     | otherwise = do
@@ -152,7 +152,7 @@ instance AttribValue Int where
            fattrib <- newForeignPtr pattrib (c'attribute_free nullPtr)
            return $ PAttribInt(fattrib, (fromIntegral k), v)
          else attribCreateNull
-  
+
   attribSet attrib value pattriblist = return attrib -- TODO: implement
 
 -- | AttribValue instance for Set
@@ -186,7 +186,7 @@ instance AttribValue Set where
               } <- peek pattr
               v <- pointableFrom tptr
               return $ PAttribSet(fattr, (fromIntegral k), v)
-  
+
   attribAdd attrib pattriblist = do
     withForeignPtr (attribPtr attrib) $ \pattrib -> do
       let
@@ -203,7 +203,7 @@ instance AttribValue Set where
             fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
             return $ PAttribSet(fattrib, (fromIntegral k), v)
           else attribCreateNull
-  
+
   attribGet attrib pattriblist
     | attribKey attrib == 0  = attribCreateNull
     | otherwise = do
@@ -219,7 +219,7 @@ instance AttribValue Set where
            fattrib <- newForeignPtr pattrib (c'attribute_free nullPtr)
            return $ PAttribSet(fattrib, (fromIntegral k), v)
          else attribCreateNull
-  
+
   attribSet attrib value pattriblist = return attrib -- TODO: implement
 
 -- | AttribValue instance for a pair of Pointables
@@ -231,7 +231,7 @@ instance (AttribValue a, AttribValue b) => AttribValue (a,b) where
   attribKey (PAttribPair(_,k,_)) = k
   attribValue (PAttribPair(_,_,v)) = v
   attribInit p k v = (PAttribPair(p,k,v))
-  attribIsNull a = 
+  attribIsNull a =
     (attribIsNull $ fstAttribute a) || (attribIsNull $ sndAttribute a)
   attribCreateNull = do
     attrib1 <- attribCreateNull
@@ -239,28 +239,28 @@ instance (AttribValue a, AttribValue b) => AttribValue (a,b) where
     return $ PAttribPair((attribPtr   attrib1, attribPtr   attrib2),
                          (attribKey   attrib1, attribKey   attrib2),
                          (attribValue attrib1, attribValue attrib2))
-  
+
   attribCreate (key1,key2) (value1,value2) = do
     attrib1 <- attribCreate key1 value1
     attrib2 <- attribCreate key2 value2
     return $ PAttribPair((attribPtr    attrib1, attribPtr    attrib2),
                          (attribKey    attrib1, attribKey    attrib2),
                          (attribValue  attrib1, attribValue  attrib2))
-  
+
   attribAdd attrib pattriblist = do
     attrib1 <- attribAdd (fstAttribute attrib) pattriblist
     attrib2 <- attribAdd (sndAttribute attrib) pattriblist
     return $ PAttribPair((attribPtr    attrib1, attribPtr    attrib2),
                          (attribKey    attrib1, attribKey    attrib2),
                          (attribValue  attrib1, attribValue  attrib2))
-  
+
   attribGet attrib pattriblist = do
     attrib1 <- attribGet (fstAttribute attrib) pattriblist
     attrib2 <- attribGet (sndAttribute attrib) pattriblist
     return $ PAttribPair((attribPtr    attrib1, attribPtr    attrib2),
                          (attribKey    attrib1, attribKey    attrib2),
                          (attribValue  attrib1, attribValue  attrib2))
-  
+
   attribSet attrib value pattriblist = return attrib -- TODO: implement
 
 -- | Returns the first attribute of a pair
@@ -277,7 +277,7 @@ sndAttribute (PAttribPair((_,p2),(_,k2),(_,v2))) = attribInit p2 k2 v2
 class (AttribValue b) => Attributable a b where
   type PAttributable a b :: *
   -- | Creates an attributable element with no attributes
-  createEmpty :: PAttributable a b -> IO (a ())
+  --createEmpty :: PAttributable a () -> IO (a ())
   -- | Creates an attributable element and ensures it has the given attribute
   createAttributed :: Attribute b -> PAttributable a b -> IO (a b)
   -- | Adds a new attribute to an attributable element and returns it
@@ -290,7 +290,7 @@ class (AttribValue b) => Attributable a b where
 
 class (Attributable e a, AttribValue a, AttribValue b) => Extendable e a b where
   type Target e a b :: *
-  extendWithAttrib :: AttribValue b => e a -> Attribute b -> IO (Target e a b)
+  extendWithAttrib :: AttribValue b => Attribute b -> e a -> IO (Target e a b)
 
 attributeNull :: IO (ForeignPtr C'attribute)
 attributeNull = newForeignPtr nullPtr (c'attribute_free nullPtr)
@@ -319,7 +319,7 @@ attributeListCreate :: Int -> IO (ForeignPtr C'attribute_list)
 attributeListCreate size = do
   fattriblist <- attributeListAlloc
   withForeignPtr fattriblist $ \pattriblist -> do
-    r <- c'attribute_list_create pattriblist 2
+    r <- c'attribute_list_create pattriblist (fromIntegral size)
     if r /= c'SUCCESS
       then error $ "Failed to create attribute_list with " ++ (show r)
       else return fattriblist
@@ -327,7 +327,7 @@ attributeListCreate size = do
 instance (AttribValue a, Eq a, Eq (Key a)) => Eq (Attribute a) where
   (==) a b
     | attribIsNull a || attribIsNull b = False
-    | otherwise = (attribKey   a == attribKey b  ) && 
+    | otherwise = (attribKey   a == attribKey b  ) &&
                   (attribValue a == attribValue b)
 
 {-
@@ -375,6 +375,18 @@ nullAttribute = unsafePerformIO $ attribCreateNull
 nodeNull :: Node ()
 nodeNull = Node nullPtr (0,0) 0 0 AttribUnit
 
+nodeEmpty :: Ptr C'node -> IO (Node ())
+nodeEmpty pnode
+  | pnode == nullPtr = do
+    return nodeNull
+  | otherwise        = do
+    (C'node x y o s _ _) <- peek pnode
+    return $ Node pnode
+        (realToFrac x, realToFrac y)
+        (realToFrac o)
+        (fromIntegral s)
+        AttribUnit
+
 nodeFromListItem :: AttribValue a => Attribute a -> Ptr C'list_item
     -> IO (Node a)
 nodeFromListItem attrib pitem = do
@@ -386,6 +398,7 @@ nodeFromListItem attrib pitem = do
 
 instance (AttribValue a) => Attributable Node a where
   type PAttributable Node a = Ptr C'node
+  {-
   createEmpty pnode
     | pnode == nullPtr = do
       return $ Node nullPtr (0,0) 0 0 AttribUnit
@@ -396,7 +409,7 @@ instance (AttribValue a) => Attributable Node a where
           (realToFrac o)
           (fromIntegral s)
           AttribUnit
-  
+  -}
   createAttributed attrib pnode
     | pnode == nullPtr = do
       a <- attribCreateNull
@@ -410,20 +423,22 @@ instance (AttribValue a) => Attributable Node a where
             (realToFrac o)
             (fromIntegral s)
             nattrib
-  
+
   addAttribute attrib node = attribAdd attrib (p'node'attributes $ nodePtr node)
-    
-  getAttribute attrib node = 
+
+  getAttribute attrib node =
     liftM attribValue $ attribGet attrib (p'node'attributes $ nodePtr node)
-  
+
   setAttribute attrib value (Node ptr p o s _) = do
     nattrib <- attribSet attrib value (p'node'attributes ptr)
     return $ Node ptr p o s nattrib
 
 instance (AttribValue a, AttribValue b) => Extendable Node a b where
   type Target Node a b = Node (a,b)
-  extendWithAttrib (node@(Node pnode (x,y) o s attrib1)) attrib2 = do
+  extendWithAttrib attrib2 (node@(Node pnode (x,y) o s attrib1)) = do
+    print "extend 1"
     attrib2' <- addAttribute attrib2 node
+    print "extend 2"
     return (Node pnode (x,y) o s
         (PAttribPair((attribPtr    attrib1, attribPtr    attrib2'),
                      (attribKey    attrib1, attribKey    attrib2'),
@@ -444,12 +459,12 @@ data Link =
 
 linkFromPtr :: Ptr C'link -> IO (Link)
 linkFromPtr plink
-  | plink == nullPtr = return $ 
+  | plink == nullPtr = return $
       Link nullPtr nullPtr 0 nodeNull nodeNull
   | otherwise        = do
     (C'link a b w attrlist) <- peek plink
-    nodea <- createEmpty $ c'link_head'origin a
-    nodeb <- createEmpty $ c'link_head'origin b
+    nodea <- nodeEmpty $ c'link_head'origin a
+    nodeb <- nodeEmpty $ c'link_head'origin b
     return $ Link plink nullPtr (realToFrac w) nodea nodeb
 
 -- add key and attributable
@@ -511,11 +526,11 @@ graphFromPtr fgraph attrib =
     links <- createList (p'graph'links pgraph) (linkFromListItem) -- key
     return $ Graph fgraph nodes links
 
--- | Creates a regular grid graph from an image. The step in pixels between 
+-- | Creates a regular grid graph from an image. The step in pixels between
 --   grid rows and cols can be given, like also the neighborhood type and the
 --   label for the attribute that will be used for storing the pixel values.
-graphFromImage :: 
-    (Num a, AttribValue a, PAttribValue a ~ ForeignPtr C'attribute) => 
+graphFromImage ::
+    (Num a, AttribValue a, PAttribValue a ~ ForeignPtr C'attribute) =>
     PixelImage -> Int -> Int -> Int -> Int -> GraphNeighborhood -> Attribute a
     -> IO (Graph a)
 graphFromImage image offsetx offsety stepx stepy neighborhood attrib = do
