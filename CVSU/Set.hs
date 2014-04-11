@@ -46,8 +46,7 @@ setCreate = do
 setFromPtr :: Ptr C'disjoint_set -> IO (Set)
 setFromPtr pset = do
   C'disjoint_set {
-    c'disjoint_set'id = p,
-    c'disjoint_set'rank = r
+    c'disjoint_set'id = p
   } <- peek pset
   fp <- newForeignPtr p (c'disjoint_set_free nullPtr)
   i <- c'disjoint_set_id p
@@ -57,8 +56,7 @@ setFromPtr pset = do
 setFromFPtr :: ForeignPtr C'disjoint_set -> IO Set
 setFromFPtr fset = withForeignPtr fset $ \pset -> do
   C'disjoint_set {
-  c'disjoint_set'id = p,
-  c'disjoint_set'rank = r
+  c'disjoint_set'id = p
   } <- peek pset
   i <- c'disjoint_set_id p
   return $ Set fset (fromIntegral i)

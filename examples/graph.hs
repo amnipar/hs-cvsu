@@ -16,7 +16,7 @@ import Foreign.ForeignPtr
 import ReadArgs
 
 valueAttribute :: IO (Attribute Int)
-valueAttribute = attributeCreate 1 6
+valueAttribute = attributeCreate 1 0
 
 componentAttribute :: IO (Attribute Set)
 componentAttribute = do
@@ -67,9 +67,7 @@ graphAddSet :: (AttribValue a, PAttribValue a ~ ForeignPtr b) =>
     Attribute Set -> Graph a -> IO (Graph (a,Set))
 graphAddSet attrib (Graph pgraph nodes links) =
   withForeignPtr (attribPtr attrib) $ \pattrib -> do
-    print "b"
     nodes' <- mapM (extendWithAttrib attrib) nodes
-    print "c"
     touchForeignPtr (attribPtr attrib)
     return $ Graph pgraph nodes' links
 
@@ -80,9 +78,12 @@ main = do
   value <- valueAttribute
   comp <- componentAttribute
   vgraph <- valueGraph pimg value
-  print "a"
   sgraph <- graphAddSet comp vgraph
-  print "d"
-  saveImage targetFile $ drawGraphGray value vgraph img
-  print "e"
+  vals <- mapM (getAttribute value) (nodes vgraph)
+  sets <- mapM (getAttribute comp) (nodes vgraph)
+  let
+    vpicker = createColorPicker (False,(0,0,0),(1,0,0)) vals
+    spicker = createColorPicker () sets
+  --saveImage targetFile $ drawGraphColor vpicker value sgraph $ grayToRGB img
+  saveImage targetFile $ drawGraphColor spicker comp sgraph $ grayToRGB img
   --cg <- findConnectedComponents binaryValue componentLabel g

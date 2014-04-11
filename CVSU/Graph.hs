@@ -17,8 +17,10 @@ module CVSU.Graph
 ) where
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.TypedPointer
 import CVSU.Bindings.List
 import CVSU.Bindings.Graph
+import CVSU.Bindings.Set
 
 import CVSU.Types
 import CVSU.TypedPointer
@@ -197,7 +199,9 @@ instance AttribValue Set where
         if r == c'SUCCESS
           then do
             pattrib' <- peek ppattrib2
-            (C'attribute k tptr) <- peek pattrib'
+            (C'attribute k tptr) <- peek pattrib' 
+            -- create needed here to set the id to correct pointer
+            c'disjoint_set_create $ castPtr $ c'typed_pointer'value tptr
             v <- pointableFrom tptr
             -- not my responsibility to free, but the attriblist's owner's
             fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
@@ -436,9 +440,7 @@ instance (AttribValue a) => Attributable Node a where
 instance (AttribValue a, AttribValue b) => Extendable Node a b where
   type Target Node a b = Node (a,b)
   extendWithAttrib attrib2 (node@(Node pnode (x,y) o s attrib1)) = do
-    print "extend 1"
     attrib2' <- addAttribute attrib2 node
-    print "extend 2"
     return (Node pnode (x,y) o s
         (PAttribPair((attribPtr    attrib1, attribPtr    attrib2'),
                      (attribKey    attrib1, attribKey    attrib2'),
