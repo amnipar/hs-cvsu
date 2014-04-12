@@ -75,7 +75,7 @@ import Foreign.C.Types
 #stoptype
 
 #starttype link_list
-#field items , Ptr <link_head>
+#field items , Ptr (Ptr <link_head>)
 #field size  , CULong
 #field count , CULong
 #stoptype

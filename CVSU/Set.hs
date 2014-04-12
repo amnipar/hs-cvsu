@@ -1,6 +1,7 @@
 module CVSU.Set
 ( Set(..)
 , setCreate
+, setNull
 , setUnion
 , setFind
 , setGetId
@@ -40,17 +41,24 @@ setCreate = do
     c'disjoint_set_create pset
     setFromFPtr fset
 
+setNull :: IO Set
+setNull = do
+  nptr <- setPtrNull
+  return $ Set nptr 0
+
 -- | For use when must _not_ free the pointer, i.e. when creating a linking to
 --   an object stored in c structures that will be destroyed by the structure
 --   destructors
 setFromPtr :: Ptr C'disjoint_set -> IO (Set)
-setFromPtr pset = do
-  C'disjoint_set {
-    c'disjoint_set'id = p
-  } <- peek pset
-  fp <- newForeignPtr p (c'disjoint_set_free nullPtr)
-  i <- c'disjoint_set_id p
-  return $ Set fp (fromIntegral i)
+setFromPtr pset
+  | pset == nullPtr = error "Null set ptr"
+  | otherwise       = do
+    C'disjoint_set {
+      c'disjoint_set'id = p
+    } <- peek pset
+    fp <- newForeignPtr p (c'disjoint_set_free nullPtr)
+    i <- c'disjoint_set_id p
+    return $ Set fp (fromIntegral i)
 
 -- | For use when must free the pointer
 setFromFPtr :: ForeignPtr C'disjoint_set -> IO Set

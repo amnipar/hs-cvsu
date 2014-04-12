@@ -28,6 +28,28 @@ componentAttribute = do
 -- using the setAttr attribute for storing the set membership.
 -- if has different value, creates a new set and uses the setLabel.
 -- returns the new setLabel and the new Node.
+unionWithSimilarNeighbors :: (Eq a, AttribValue a, AttribValue b) => 
+    Attribute (a,Set) -> Node b -> IO ()
+unionWithSimilarNeighbors pairAttr node = do
+  (val,set) <- getAttribute pairAttr node
+  neighbors <- nodeNeighbors node
+  mapM_ (unionWithSimilar pairAttr val set) neighbors
+  where
+    unionWithSimilar pair val set node = do
+      (nval,nset) <- getAttribute pair node
+      if (val == nval)
+         then do
+           setUnion set nset
+         else do
+           setNull
+
+findConnectedComponents :: (Eq a, AttribValue a, AttribValue b) => 
+    Attribute a -> Attribute Set -> [Node b] -> IO [Node (a,Set)]
+findConnectedComponents valueAttr setAttr nodes = do
+  pairAttr <- attributePair valueAttr setAttr
+  mapM_ (unionWithSimilarNeighbors pairAttr) nodes
+  mapM (createAttributed pairAttr) $ map nodePtr nodes
+
 {-
 unionWithSimilarNeighbor :: Eq a => Attribute a -> Attribute Set -> Int -> Node a-> (Int, Node (a,Set))
 unionWithSimilarNeighbor valueAttr setAttr setLabel node
@@ -80,7 +102,8 @@ main = do
   vgraph <- valueGraph pimg value
   sgraph <- graphAddSet comp vgraph
   vals <- mapM (getAttribute value) (nodes vgraph)
-  sets <- mapM (getAttribute comp) (nodes vgraph)
+  cnodes <- findConnectedComponents value comp $ nodes sgraph
+  sets <- mapM (getAttribute comp) cnodes
   let
     vpicker = createColorPicker (False,(0,0,0),(1,0,0)) vals
     spicker = createColorPicker () sets

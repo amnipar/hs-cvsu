@@ -7,8 +7,12 @@ module CVSU.Graph
 , Extendable(..)
 , Attribute(..)
 , attributeCreate
+, attributePair
+, fstAttribute
+, sndAttribute
 -- , attributeLabel
 , Node(..)
+, nodeNeighbors
 , Link(..)
 , Graph(..)
 , GraphNeighborhood(..)
@@ -31,11 +35,12 @@ import CVSU.Set
 import Foreign.Ptr
 import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
+import Foreign.Marshal.Array
 import Foreign.Marshal.Utils
 import Foreign.Concurrent
 import System.IO.Unsafe
 
-import Control.Monad (liftM)
+import Control.Monad (liftM,foldM,filterM,mapM)
 
 -- | A class for types that can be used as attributes in attributable elements.
 class AttribValue a where
@@ -267,6 +272,11 @@ instance (AttribValue a, AttribValue b) => AttribValue (a,b) where
 
   attribSet attrib value pattriblist = return attrib -- TODO: implement
 
+attributePair :: (AttribValue a, AttribValue b) =>
+    Attribute a -> Attribute b -> IO (Attribute (a,b))
+attributePair a b =
+  attribCreate (attribKey a, attribKey b) (attribValue a, attribValue b)
+
 -- | Returns the first attribute of a pair
 fstAttribute :: (AttribValue a, AttribValue b, AttribValue (a,b)) =>
     Attribute (a,b) -> Attribute a
@@ -398,7 +408,24 @@ nodeFromListItem attrib pitem = do
   createAttributed attrib $ castPtr $ c'list_item'data item
 
 --nodeLinks :: Node -> [Link]
---nodeNeighbors :: Node -> [Node]
+
+nodeNeighbors :: AttribValue a => Node a -> IO [Node a]
+nodeNeighbors node = do
+  (C'link_list pheads _ n) <- peek $ p'node'links $ nodePtr node
+  pheads::[Ptr C'link_head] <- peekArray (fromIntegral n) pheads
+  pheads' <- filterM checkNull pheads
+  heads::[C'link_head] <- mapM peek pheads'
+  others::[C'link_head] <- mapM peek $ map c'link_head'other heads
+  mapM (createAttributed (nodeAttribute node)) $ map c'link_head'origin others
+  where
+    checkNull :: Ptr C'link_head -> IO (Bool)
+    checkNull p = return (p /= nullPtr)
+    peekHead :: [C'link_head] -> Ptr C'link_head -> IO [C'link_head]
+    peekHead hs ph
+      | ph == nullPtr = return hs
+      | otherwise = do
+        h <- peek ph
+        return (h:hs)
 
 instance (AttribValue a) => Attributable Node a where
   type PAttributable Node a = Ptr C'node
