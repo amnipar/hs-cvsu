@@ -28,7 +28,7 @@ componentAttribute = do
 -- using the setAttr attribute for storing the set membership.
 -- if has different value, creates a new set and uses the setLabel.
 -- returns the new setLabel and the new Node.
-unionWithSimilarNeighbors :: (Eq a, AttribValue a, AttribValue b) => 
+unionWithSimilarNeighbors :: (Eq a, AttribValue a, AttribValue b) =>
     Attribute (a,Set) -> Node b -> IO ()
 unionWithSimilarNeighbors pairAttr node = do
   (val,set) <- getAttribute pairAttr node
@@ -43,7 +43,7 @@ unionWithSimilarNeighbors pairAttr node = do
          else do
            setNull
 
-findConnectedComponents :: (Eq a, AttribValue a, AttribValue b) => 
+findConnectedComponents :: (Eq a, AttribValue a, AttribValue b) =>
     Attribute a -> Attribute Set -> [Node b] -> IO [Node (a,Set)]
 findConnectedComponents valueAttr setAttr nodes = do
   pairAttr <- attributePair valueAttr setAttr
@@ -82,16 +82,9 @@ findConnectedComponents valueAttr setAttr (Graph p nodes links) =
   Graph p (snd.mapAccumL (unionWithSimilarNeighbor valueAttr setAttr) 1 nodes) links
   -}
 
-valueGraph :: PixelImage -> Attribute Int -> IO (Graph Int)
-valueGraph pimg value = graphFromImage pimg 5 5 8 8 Neighborhood4 value
-
-graphAddSet :: (AttribValue a, PAttribValue a ~ ForeignPtr b) =>
-    Attribute Set -> Graph a -> IO (Graph (a,Set))
-graphAddSet attrib (Graph pgraph nodes links) =
-  withForeignPtr (attribPtr attrib) $ \pattrib -> do
-    nodes' <- mapM (extendWithAttrib attrib) nodes
-    touchForeignPtr (attribPtr attrib)
-    return $ Graph pgraph nodes' links
+valueGraph :: CGraph -> PixelImage -> Attribute Int -> IO (Graph Int)
+valueGraph cg pimg value =
+  graphCreateFromImage pimg 5 5 8 8 Neighborhood4 value cg
 
 main = do
   (sourceFile, targetFile) <- readArgs
@@ -99,14 +92,14 @@ main = do
   pimg <- toPixelImage $ threshold MaxAndZero 127 $ unsafeImageTo8Bit img
   value <- valueAttribute
   comp <- componentAttribute
-  vgraph <- valueGraph pimg value
-  sgraph <- graphAddSet comp vgraph
+  cg <- newCGraph
+  vgraph <- valueGraph cg pimg value
+  sgraph <- graphAddAttribute comp vgraph
   vals <- mapM (getAttribute value) (nodes vgraph)
   cnodes <- findConnectedComponents value comp $ nodes sgraph
   sets <- mapM (getAttribute comp) cnodes
   let
     vpicker = createColorPicker (False,(0,0,0),(1,0,0)) vals
     spicker = createColorPicker () sets
-  --saveImage targetFile $ drawGraphColor vpicker value sgraph $ grayToRGB img
+  --saveImage targetFile $ drawGraphColor vpicker value vgraph $ grayToRGB img
   saveImage targetFile $ drawGraphColor spicker comp sgraph $ grayToRGB img
-  --cg <- findConnectedComponents binaryValue componentLabel g

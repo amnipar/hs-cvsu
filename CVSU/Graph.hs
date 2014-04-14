@@ -14,10 +14,13 @@ module CVSU.Graph
 , Node(..)
 , nodeNeighbors
 , Link(..)
+, CGraph(..)
+, newCGraph
 , Graph(..)
 , GraphNeighborhood(..)
 , graphCreate
-, graphFromImage
+, graphCreateFromImage
+, graphAddAttribute
 ) where
 
 import CVSU.Bindings.Types
@@ -41,6 +44,7 @@ import Foreign.Concurrent
 import System.IO.Unsafe
 
 import Control.Monad (liftM,foldM,filterM,mapM)
+import Data.IORef
 
 -- | A class for types that can be used as attributes in attributable elements.
 class AttribValue a where
@@ -204,7 +208,7 @@ instance AttribValue Set where
         if r == c'SUCCESS
           then do
             pattrib' <- peek ppattrib2
-            (C'attribute k tptr) <- peek pattrib' 
+            (C'attribute k tptr) <- peek pattrib'
             -- create needed here to set the id to correct pointer
             c'disjoint_set_create $ castPtr $ c'typed_pointer'value tptr
             v <- pointableFrom tptr
@@ -301,6 +305,7 @@ class (AttribValue b) => Attributable a b where
   -- | Sets the value of the given attribute in an attributable element and
   --   returns the attributable such that it declares the new attribute
   setAttribute :: (AttribValue c) => Attribute c -> c -> a b -> IO (a c)
+  --getValue :: (AttribValue c) => Attribute c -> a b -> IO (c)
 
 class (Attributable e a, AttribValue a, AttribValue b) => Extendable e a b where
   type Target e a b :: *
@@ -506,9 +511,21 @@ linkFromListItem pitem = do
 
 --linkGetOther :: Link -> Node
 
+data CGraph = CGraph{ graphPtr :: IORef(ForeignPtr C'graph) }
+
+newCGraph :: IO CGraph
+newCGraph = do
+  pgraph <- c'graph_alloc
+  if pgraph /= nullPtr
+    then do
+      fgraph <- newForeignPtr pgraph (c'graph_free pgraph)
+      rgraph <- newIORef fgraph
+      return $ CGraph rgraph
+    else error "Memory allocation failed in newCGraph"
+
 data Graph n =
   Graph
-  { graphPtr :: !(ForeignPtr C'graph)
+  { cgraph :: !CGraph
   , nodes :: [Node n]
   , links :: [Link]
   }
@@ -531,51 +548,100 @@ graphAlloc = do
     then newForeignPtr ptr (c'graph_free ptr)
     else error "Memory allocation failed in graphAlloc"
 
+doGraphCreate :: (AttribValue a, PAttribValue a ~ ForeignPtr C'attribute) =>
+    Int -> Int -> Attribute a -> CGraph -> IO ()
+doGraphCreate snode slink attrib cg =
+  modifyIORef (graphPtr cg) $ \fgraph -> unsafePerformIO $ do
+    withForeignPtr fgraph $ \pgraph ->
+      withForeignPtr (attribPtr attrib) $ \pattr -> do
+        r <- c'graph_create
+                 pgraph
+                 (fromIntegral snode)
+                 (fromIntegral slink)
+                 pattr
+        if r /= c'SUCCESS
+          then error $ "Failed to create graph with " ++ (show r)
+          else return fgraph
+
 -- | Creates an empty graph. In the underlying structure, memory will be
 --   allocated for the given amount of nodes and links.
 graphCreate :: (AttribValue a, PAttribValue a ~ ForeignPtr C'attribute) =>
-    Int -> Int -> Attribute a -> IO (Graph a)
-graphCreate nodeSize linkSize attrib = do
-  fgraph <- graphAlloc
-  withForeignPtr fgraph $ \pgraph ->
-    withForeignPtr (attribPtr attrib) $ \pattr -> do
-      r <- c'graph_create pgraph
-               (fromIntegral nodeSize)
-               (fromIntegral linkSize)
-               pattr
-      if r /= c'SUCCESS
-        then error $ "Failed to create graph with " ++ (show r)
-        else graphFromPtr fgraph attrib
+    Int -> Int -> Attribute a -> CGraph -> IO (Graph a)
+graphCreate snode slink attrib cg = do
+  doGraphCreate snode slink attrib cg
+  graphFromPtr cg attrib
 
-graphFromPtr :: AttribValue a => ForeignPtr C'graph -> Attribute a
-    -> IO (Graph a)
-graphFromPtr fgraph attrib =
+graphFromPtr :: AttribValue a => CGraph -> Attribute a -> IO (Graph a)
+graphFromPtr cg attrib = do
+  fgraph <- readIORef $ graphPtr cg
   withForeignPtr fgraph $ \pgraph -> do
     nodes <- createList (p'graph'nodes pgraph) (nodeFromListItem attrib)
     links <- createList (p'graph'links pgraph) (linkFromListItem) -- key
-    return $ Graph fgraph nodes links
+    return $ Graph cg nodes links
+
+doGraphCreateFromImage ::
+    (Num a, AttribValue a, PAttribValue a ~ ForeignPtr C'attribute) =>
+    PixelImage -> Int -> Int -> Int -> Int -> GraphNeighborhood -> Attribute a
+    -> CGraph -> IO ()
+doGraphCreateFromImage image ox oy sx sy n attrib cg = do
+  modifyIORef (graphPtr cg) $ \fgraph -> unsafePerformIO $ do
+    withForeignPtr fgraph $ \pgraph ->
+      withForeignPtr (imagePtr image) $ \pimage ->
+        withForeignPtr (attribPtr attrib) $ \pattrib -> do
+          r <- c'graph_create_from_image
+              pgraph
+              pimage
+              (fromIntegral ox)
+              (fromIntegral oy)
+              (fromIntegral sx)
+              (fromIntegral sy)
+              (cNeighborhood n)
+              pattrib
+          if r /= c'SUCCESS
+            then error $ "Failed to create graph from image with " ++ (show r)
+            else return fgraph
 
 -- | Creates a regular grid graph from an image. The step in pixels between
 --   grid rows and cols can be given, like also the neighborhood type and the
 --   label for the attribute that will be used for storing the pixel values.
-graphFromImage ::
+graphCreateFromImage ::
     (Num a, AttribValue a, PAttribValue a ~ ForeignPtr C'attribute) =>
     PixelImage -> Int -> Int -> Int -> Int -> GraphNeighborhood -> Attribute a
-    -> IO (Graph a)
-graphFromImage image offsetx offsety stepx stepy neighborhood attrib = do
-  fgraph <- graphAlloc
-  withForeignPtr fgraph $ \pgraph ->
-    withForeignPtr (imagePtr image) $ \pimage ->
-      withForeignPtr (attribPtr attrib) $ \pattrib -> do
-        r <- c'graph_create_from_image
-            pgraph
-            pimage
-            (fromIntegral offsetx)
-            (fromIntegral offsety)
-            (fromIntegral stepx)
-            (fromIntegral stepy)
-            (cNeighborhood neighborhood)
-            pattrib
-        if r /= c'SUCCESS
-          then error $ "Failed to create graph from image with " ++ (show r)
-          else graphFromPtr fgraph attrib
+    -> CGraph -> IO (Graph a)
+graphCreateFromImage image ox oy sx sy n attrib cg = do
+  doGraphCreateFromImage image ox oy sx sy n attrib cg
+  graphFromPtr cg attrib
+  --fgraph <- graphAlloc
+  --modifyIORef cgraph $ fgraph ->
+  --withForeignPtr fgraph $ \pgraph ->
+  --  withForeignPtr (imagePtr image) $ \pimage ->
+  --    withForeignPtr (attribPtr attrib) $ \pattrib -> do
+  --      r <- c'graph_create_from_image
+  --          pgraph
+  --          pimage
+  --          (fromIntegral offsetx)
+  --          (fromIntegral offsety)
+  --          (fromIntegral stepx)
+  --          (fromIntegral stepy)
+  --          (cNeighborhood neighborhood)
+  --          pattrib
+  --      if r /= c'SUCCESS
+  --        then error $ "Failed to create graph from image with " ++ (show r)
+  --        else graphFromPtr fgraph attrib
+
+doGraphAddAttribute ::
+    (AttribValue a, PAttribValue a ~ ForeignPtr f, AttribValue b) =>
+    Attribute a -> Graph b -> IO ()
+doGraphAddAttribute attrib (Graph cg ns _) =
+  modifyIORef (graphPtr cg) $ \fgraph -> unsafePerformIO $ do
+    withForeignPtr (attribPtr attrib) $ \pattrib -> do
+      mapM_ (extendWithAttrib attrib) $ ns
+      return fgraph
+
+graphAddAttribute ::
+    (AttribValue a, PAttribValue a ~ ForeignPtr f, AttribValue b) =>
+    Attribute a -> Graph b -> IO (Graph (b,a))
+graphAddAttribute attrib graph = do
+  doGraphAddAttribute attrib graph
+  pairAttrib <- attributePair (nodeAttribute $ head $ nodes graph) attrib
+  graphFromPtr (cgraph graph) pairAttrib
