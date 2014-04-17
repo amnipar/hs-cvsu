@@ -21,6 +21,7 @@ Library
     CVSU.Types
     CVSU.C.Types
     CVSU.TypedPointer
+    CVSU.Attribute
     CVSU.List
     CVSU.Set
     CVSU.Graph
@@ -36,6 +37,7 @@ Library
   Other-Modules:
     CVSU.Bindings.Types
     CVSU.Bindings.TypedPointer
+    CVSU.Bindings.Attribute
     CVSU.Bindings.List
     CVSU.Bindings.Set
     CVSU.Bindings.Graph
@@ -68,6 +70,7 @@ Library
     c/cvsu_output.h,
     c/cvsu_types.h,
     c/cvsu_typed_pointer.h,
+    c/cvsu_attribute.h,
     c/cvsu_list.h,
     c/cvsu_set.h,
     c/cvsu_graph.h,
@@ -91,6 +94,7 @@ Library
     c/cvsu_output.h,
     c/cvsu_types.h,
     c/cvsu_typed_pointer.h,
+    c/cvsu_attribute.h,
     c/cvsu_list.h,
     c/cvsu_set.h,
     c/cvsu_graph.h,
@@ -112,6 +116,7 @@ Library
     c/cvsu_output.c,
     c/cvsu_types.c,
     c/cvsu_typed_pointer.c,
+    c/cvsu_attribute.c,
     c/cvsu_list.c,
     c/cvsu_set.c,
     c/cvsu_graph.c,
