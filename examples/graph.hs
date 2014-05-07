@@ -5,6 +5,7 @@ import CVSU.Types
 import CVSU.PixelImage hiding (writePixelImage)
 import CVSU.QuadForest
 import CVSU.Graph
+import CVSU.Attribute
 import CVSU.Set
 
 import CV.Image
@@ -23,7 +24,7 @@ import Data.Ord
 valueAttribute :: IO (Attribute Int)
 valueAttribute = attributeCreate 1 0
 
-componentAttribute :: IO (Attribute Set)
+componentAttribute :: IO (Attribute (Set ()))
 componentAttribute = do
   s <- setCreate
   attributeCreate 2 s
@@ -39,7 +40,7 @@ valueGraph cg pimg value =
 -- if has different value, creates a new set and uses the setLabel.
 -- returns the new setLabel and the new Node.
 unionWithSimilarNeighbors :: (Eq a, AttribValue a, AttribValue b) =>
-    Attribute (a,Set) -> Node b -> IO ()
+    Attribute (a,Set()) -> Node b -> IO ()
 unionWithSimilarNeighbors pairAttr node = do
   (val,set) <- getAttribute pairAttr node
   neighbors <- nodeNeighbors node
@@ -48,19 +49,17 @@ unionWithSimilarNeighbors pairAttr node = do
     unionWithSimilar pair val set node = do
       (nval,nset) <- getAttribute pair node
       if (val == nval)
-         then do
-           setUnion set nset
-         else do
-           setNull
+         then setUnion set nset
+         else setNull
 
 findConnectedComponents :: (Eq a, AttribValue a, AttribValue b) =>
-    Attribute a -> Attribute Set -> [Node b] -> IO [Node (a,Set)]
+  Attribute a -> Attribute (Set ()) -> [Node b] -> IO [Node (a,Set())]
 findConnectedComponents valueAttr setAttr nodes = do
   pairAttr <- attributePair valueAttr setAttr
   mapM_ (unionWithSimilarNeighbors pairAttr) nodes
   mapM (createAttributed pairAttr) $ map nodePtr nodes
 
-removeLinkSmaller :: Attribute Set -> Double -> Link -> IO ()
+removeLinkSmaller :: Attribute (Set ()) -> Double -> Link -> IO ()
 removeLinkSmaller setAttr t link =
   if linkWeight link < t
     then do
@@ -73,8 +72,7 @@ removeLinkSmaller setAttr t link =
         else return ()
     else return ()
 
-
-removeLink :: Attribute Set -> Link -> IO ()
+removeLink :: Attribute (Set ()) -> Link -> IO ()
 removeLink setAttr link = do
   set1 <- getAttribute setAttr $ linkFrom link
   set2 <- getAttribute setAttr $ linkTo link
@@ -85,7 +83,7 @@ removeLink setAttr link = do
     else return ()
 
 minimumSpanningForest :: (Num a, AttribValue a, AttribValue b) =>
-  Attribute a -> Attribute Set -> Double -> Graph b -> IO (Graph (a,Set))
+  Attribute a -> Attribute (Set ()) -> Double -> Graph b -> IO (Graph (a,Set()))
 minimumSpanningForest valueAttr setAttr t graph = do
   pairAttr <- attributePair valueAttr setAttr
   mapM_ (removeLinkSmaller setAttr t) $
@@ -93,7 +91,7 @@ minimumSpanningForest valueAttr setAttr t graph = do
   graphGetAttribute pairAttr graph
 
 minimumSpanningTrees :: (Num a, AttribValue a, AttribValue b) =>
-  Attribute a -> Attribute Set -> Int -> Graph b -> IO (Graph (a,Set))
+  Attribute a -> Attribute (Set ()) -> Int -> Graph b -> IO (Graph (a,Set()))
 minimumSpanningTrees valueAttr setAttr n graph = do
   pairAttr <- attributePair valueAttr setAttr
   mapM_ (removeLink setAttr) $ take ((length $ links graph) - (n-1)) $
@@ -123,8 +121,8 @@ main = do
   cg <- newCGraph
   vgraph <- valueGraph cg pimg value
   sgraph <- graphAddAttribute comp vgraph
-  --fgraph <- minimumSpanningForest value comp 8 sgraph
-  fgraph <- minimumSpanningTrees value comp n sgraph
+  fgraph <- minimumSpanningForest value comp n sgraph
+  --fgraph <- minimumSpanningTrees value comp n sgraph
   vals <- mapM (getAttribute value) (nodes fgraph)
   --cnodes <- findConnectedComponents value comp $ nodes sgraph
   sets <- mapM (getAttribute comp) (nodes fgraph)

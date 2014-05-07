@@ -152,3 +152,7 @@ import Foreign.Ptr
 #field variance , CDouble
 #field deviation , CDouble
 #stoptype
+
+#ccall statistics_alloc , IO (Ptr <statistics>)
+
+#ccall statistics_free , Ptr <statistics> -> IO ()

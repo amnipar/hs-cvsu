@@ -1,4 +1,5 @@
-{-#LANGUAGE TypeFamilies #-}
+{-#LANGUAGE TypeFamilies, FlexibleInstances, MultiParamTypeClasses,
+            ScopedTypeVariables #-}
 module CVSU.Set
 ( Set(..)
 , setCreate
@@ -22,14 +23,15 @@ import Foreign.Storable
 import Foreign.Marshal.Utils
 import Foreign.Concurrent
 
+import Control.Monad
 import System.IO.Unsafe
 
-data Set =
+data AttribValue a => Set a =
   Set
   { setPtr :: !(ForeignPtr C'disjoint_set)
   , setId :: Int
   , setSize :: Int
-  -- , setAttribute :: Attribute a
+  , setAttr :: Attribute a
   }
 
 setPtrNull :: IO (ForeignPtr C'disjoint_set)
@@ -39,26 +41,30 @@ setAlloc :: IO (ForeignPtr C'disjoint_set)
 setAlloc = do
   ptr <- c'disjoint_set_alloc
   if ptr /= nullPtr
-     then newForeignPtr ptr (c'disjoint_set_free ptr)
-     else error "Memory allocation failed in allocSet"
+    then newForeignPtr ptr (c'disjoint_set_free ptr)
+    else error "Memory allocation failed in setAlloc"
 
-setCreate :: IO (Set)
+setCreate :: IO (Set ())
 setCreate = do
   fset <- setAlloc
   withForeignPtr fset $ \pset -> do
     c'disjoint_set_create pset 0
-    setFromFPtr fset
+    setFromFPtr fset AttribUnit
 
-setNull :: IO Set
+setNull :: IO (Set ())
 setNull = do
   nptr <- setPtrNull
-  return $ Set nptr 0 0
+  return $ Set nptr 0 0 AttribUnit
+
+setAttribUnit :: AttribValue a => Set a -> Set ()
+setAttribUnit (Set p i s _) = Set p i s AttribUnit
 
 -- | For use when must _not_ free the pointer, i.e. when creating a linking to
 --   an object stored in c structures that will be destroyed by the structure
 --   destructors
-setFromPtr :: Ptr C'disjoint_set -> IO (Set)
-setFromPtr pset
+setFromPtr :: AttribValue a =>
+    Ptr C'disjoint_set -> Attribute a -> IO (Set a)
+setFromPtr pset attrib
   | pset == nullPtr = error "Null set ptr"
   | otherwise       = do
     C'disjoint_set {
@@ -67,44 +73,53 @@ setFromPtr pset
     } <- peek pset
     fp <- newForeignPtr p (c'disjoint_set_free nullPtr)
     i <- c'disjoint_set_id p
-    return $ Set fp (fromIntegral i) (fromIntegral s)
+    return $ Set fp (fromIntegral i) (fromIntegral s) attrib
 
 -- | For use when must free the pointer
-setFromFPtr :: ForeignPtr C'disjoint_set -> IO Set
-setFromFPtr fset = withForeignPtr fset $ \pset -> do
-  C'disjoint_set {
-    c'disjoint_set'id = p,
-    c'disjoint_set'size = s
-  } <- peek pset
-  i <- c'disjoint_set_id p
-  return $ Set fset (fromIntegral i) (fromIntegral s)
+setFromFPtr :: AttribValue a =>
+    ForeignPtr C'disjoint_set -> Attribute a -> IO (Set a)
+setFromFPtr fset attrib = withForeignPtr fset $ \pset ->
+  if pset == nullPtr
+   then return $ Set fset 0 0 attrib
+   else do
+    C'disjoint_set {
+      c'disjoint_set'id = p,
+      c'disjoint_set'size = s
+    } <- peek pset
+    i <- c'disjoint_set_id p
+    return $ Set fset (fromIntegral i) (fromIntegral s) attrib
 
-setUnion :: Set -> Set -> IO (Set)
+setUnion :: AttribValue a => Set a -> Set a -> IO (Set a)
 setUnion s1 s2 =
   withForeignPtr (setPtr s1) $ \ps1 ->
     withForeignPtr (setPtr s2) $ \ps2 -> do
       s3 <- c'disjoint_set_union ps1 ps2
-      setFromPtr s3
+      setFromPtr s3 (setAttr s1)
 
-setFind :: Set -> IO (Set)
+setFind :: AttribValue a => Set a -> IO (Set a)
 setFind s =
   withForeignPtr (setPtr s) $ \ps -> do
     ps' <- c'disjoint_set_find ps
-    setFromPtr ps'
+    setFromPtr ps' (setAttr s)
 
-setGetId :: Set -> IO Int
-setGetId set =
+setGetId :: AttribValue a => Set a -> Int
+setGetId set = unsafePerformIO $
   withForeignPtr (setPtr set) $ \pset -> do
     i <- c'disjoint_set_id pset
     return $ fromIntegral i
 
-instance Pointable (Set) where
+setAttribList :: AttribValue a => Set a -> Ptr C'attribute_list
+setAttribList set = unsafePerformIO $
+  withForeignPtr (setPtr set) $ \pset -> return $ p'disjoint_set'attributes pset
+
+instance Pointable (Set ()) where
   pointableType _ = PSet
   pointableNull = unsafePerformIO $ setNull
   pointableFrom (C'typed_pointer l c t v)
-    | l == c't_disjoint_set = setFromPtr ((castPtr v)::Ptr C'disjoint_set)
-    | otherwise             = error $
-        "Unable to convert " ++ (showPointableType l) ++ " to Set"
+    | l == c't_disjoint_set =
+      setFromPtr (castPtr v) AttribUnit -- ::Ptr C'disjoint_set)
+    | otherwise =
+        error $ "Unable to convert " ++ (showPointableType l) ++ " to Set"
   pointableInto s = do
     fset <- setAlloc
     withForeignPtr fset $ \pset -> do
@@ -112,10 +127,10 @@ instance Pointable (Set) where
       typedPointerCreate c't_disjoint_set 1 0 (castPtr pset)
 
 -- | AttribValue instance for Set
-instance AttribValue Set where
-  type PAttribValue Set = ForeignPtr C'attribute
-  type Key Set = Int
-  newtype (Attribute Set) = PAttribSet(PAttribValue Set, Key Set, Set)
+instance AttribValue a => AttribValue (Set a) where
+  type PAttribValue (Set a) = ForeignPtr C'attribute
+  type Key (Set a) = Int
+  newtype (Attribute (Set a)) = PAttribSet(PAttribValue (Set a), Key (Set a), (Set a))
   attribPtr (PAttribSet(p,_,_)) = p
   attribKey (PAttribSet(_,k,_)) = k
   attribValue (PAttribSet(_,_,v)) = v
@@ -123,11 +138,14 @@ instance AttribValue Set where
   attribInit p k v = (PAttribSet(p,k,v))
   attribCreateNull = do
     p <- attributeNull
-    return (PAttribSet(p, 0, pointableNull))
+    a <- attribCreateNull
+    v <- setNull
+    s <- setFromFPtr (setPtr v) a
+    return (PAttribSet(p, 0, s))
   attribCreate key value
     | key == 0  = attribCreateNull
     | otherwise = do
-      ftptr <- pointableInto value
+      ftptr <- pointableInto $ setAttribUnit value
       -- this will be my responsibility to free
       fattr <- attributeAlloc
       withForeignPtr fattr $ \pattr ->
@@ -140,8 +158,9 @@ instance AttribValue Set where
                 c'attribute'key = k,
                 c'attribute'value = tptr
               } <- peek pattr
-              v <- pointableFrom tptr
-              return $ PAttribSet(fattr, (fromIntegral k), v)
+              v::(Set()) <- pointableFrom tptr
+              s <- setFromFPtr (setPtr v) (setAttr value)
+              return $ PAttribSet(fattr, (fromIntegral k), s)
 
   attribAdd attrib pattriblist = do
     withForeignPtr (attribPtr attrib) $ \pattrib -> do
@@ -156,10 +175,11 @@ instance AttribValue Set where
             (C'attribute k tptr) <- peek pattrib'
             -- create needed here to set the id to correct pointer
             c'disjoint_set_create (castPtr $ c'typed_pointer'value tptr) 0
-            v <- pointableFrom tptr
+            v::(Set()) <- pointableFrom tptr
+            s <- setFromFPtr (setPtr v) (setAttr $ attribValue attrib)
             -- not my responsibility to free, but the attriblist's owner's
             fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
-            return $ PAttribSet(fattrib, (fromIntegral k), v)
+            return $ PAttribSet(fattrib, (fromIntegral k), s)
           else attribCreateNull
 
   attribGet attrib pattriblist
@@ -172,12 +192,45 @@ instance AttribValue Set where
              c'attribute'key = k,
              c'attribute'value = tptr
            } <- peek pattrib
-           v <- pointableFrom tptr
+           v::(Set()) <- pointableFrom tptr
+           s <- setFromFPtr (setPtr v) (setAttr $ attribValue attrib)
            -- not my responsibility to free, but the attriblist's owner's
            fattrib <- newForeignPtr pattrib (c'attribute_free nullPtr)
-           return $ PAttribSet(fattrib, (fromIntegral k), v)
+           return $ PAttribSet(fattrib, (fromIntegral k), s)
          else attribCreateNull
 
   attribSet attrib value pattriblist = return attrib -- TODO: implement
 
---instance Attributable (Set) where
+instance (AttribValue a) => Attributable Set a where
+  type PAttributable Set a = Ptr C'disjoint_set
+
+  createAttributed attrib pset
+    | pset == nullPtr = do
+      a <- attribCreateNull
+      nptr <- setPtrNull
+      return $ Set nptr 0 0 a
+    | otherwise = do
+      C'disjoint_set {
+      c'disjoint_set'attributes = attriblist
+      } <- peek pset
+      with attriblist $ \pattriblist -> do
+        nattrib <- attribGet attrib pattriblist
+        setFromPtr pset nattrib
+
+  addAttribute attrib set = attribAdd attrib (setAttribList set)
+
+  getAttribute attrib set =
+    liftM attribValue $ attribGet attrib (setAttribList set)
+
+  setAttribute attrib value set = do
+    nattrib <- attribSet attrib value (setAttribList set)
+    setFromFPtr (setPtr set) nattrib
+
+instance (AttribValue a, AttribValue b) => Extendable Set a b where
+  type Target Set a b = Set (a,b)
+  extendWithAttrib attrib2 (set@(Set pset key size attrib1)) = do
+    attrib2' <- addAttribute attrib2 set
+    return (Set pset key size
+        (PAttribPair((attribPtr    attrib1, attribPtr    attrib2'),
+                     (attribKey    attrib1, attribKey    attrib2'),
+                     (attribValue  attrib1, attribValue  attrib2'))))

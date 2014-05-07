@@ -15,10 +15,16 @@ module CVSU.Types
 ) where
 
 import CVSU.Bindings.Types
+import CVSU.Bindings.TypedPointer
 import CVSU.Bindings.List
 
+import CVSU.TypedPointer
+
 import Foreign.Ptr
+import Foreign.ForeignPtr hiding (newForeignPtr)
 import Foreign.Storable
+import Foreign.Marshal.Utils
+import Foreign.Concurrent
 import Control.DeepSeq
 
 cBool :: Bool -> C'truth_value
@@ -57,6 +63,34 @@ cStatistics (Statistics n s1 s2 m v d) =
     (realToFrac m)
     (realToFrac v)
     (realToFrac d)
+
+statisticsAlloc :: IO (ForeignPtr C'statistics)
+statisticsAlloc = do
+  ptr <- c'statistics_alloc
+  if ptr /= nullPtr
+    then newForeignPtr ptr (c'statistics_free ptr)
+    else error "Memory allocation failed in statisticsAlloc"
+
+statisticsNull = Statistics 0 0 0 0 0 0
+
+statisticsFromPtr :: Ptr C'statistics -> IO (Statistics)
+statisticsFromPtr pstat = do
+  stat <- peek pstat
+  return $ hStatistics stat
+
+instance Pointable Statistics where
+  pointableType _ = PStatistics
+  pointableNull = statisticsNull
+  pointableFrom (C'typed_pointer l c t v)
+    | l == c't_statistics =
+      statisticsFromPtr (castPtr v)
+    | otherwise =
+      error $ "Unable to convert " ++ (showPointableType l) ++ " to Statistics"
+  pointableInto stat = do
+    fstat <- statisticsAlloc
+    withForeignPtr fstat $ \pstat -> do
+      poke pstat (cStatistics stat)
+      typedPointerCreate c't_statistics 1 0 (castPtr pstat)
 
 data Direction =
   DirN  |
