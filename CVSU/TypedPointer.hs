@@ -43,6 +43,7 @@ data PointableType =
   PLink |
   PLinkHead |
   PStatistics |
+  PRawMoments |
   PPixelImage deriving (Eq,Show)
 
 cTypeLabel :: PointableType -> C'type_label
@@ -71,6 +72,7 @@ cTypeLabel l
   | l == PLink          = c't_link
   | l == PLinkHead      = c't_link_head
   | l == PStatistics    = c't_statistics
+  | l == PRawMoments    = c't_raw_moments
   | l == PPixelImage    = c't_pixel_image
 
 hTypeLabel :: C'type_label -> PointableType
@@ -99,35 +101,37 @@ hTypeLabel l
   | l == c't_link           = PLink
   | l == c't_link_head      = PLinkHead
   | l == c't_statistics     = PStatistics
+  | l == c't_raw_moments    = PRawMoments
   | l == c't_pixel_image    = PPixelImage
 
 showPointableType :: C'type_label -> String
 showPointableType l
-    | l == c't_UNDEF =          "<undef>"
-    | l == c't_type  =          "<type>"
-    | l == c't_truth_value =    "<truth_value>"
-    | l == c't_pointer =        "<pointer>"
-    | l == c't_typed_pointer =  "<typed_pointer>"
-    | l == c't_string =         "<string>"
-    | l == c't_S8 =             "<S8>"
-    | l == c't_U8 =             "<U8>"
-    | l == c't_S16 =            "<S16>"
-    | l == c't_U16 =            "<U16>"
-    | l == c't_S32 =            "<S32>"
-    | l == c't_U32 =            "<U32>"
-    | l == c't_F32 =            "<F32>"
-    | l == c't_F64 =            "<F64>"
-    | l == c't_tuple =          "<tuple>"
-    | l == c't_list =           "<list>"
-    | l == c't_disjoint_set =   "<disjoint_set>"
-    | l == c't_graph =          "<graph>"
-    | l == c't_node =           "<node>"
-    | l == c't_attribute =      "<attribute>"
+    | l == c't_UNDEF          = "<undef>"
+    | l == c't_type           = "<type>"
+    | l == c't_truth_value    = "<truth_value>"
+    | l == c't_pointer        = "<pointer>"
+    | l == c't_typed_pointer  = "<typed_pointer>"
+    | l == c't_string         = "<string>"
+    | l == c't_S8             = "<S8>"
+    | l == c't_U8             = "<U8>"
+    | l == c't_S16            = "<S16>"
+    | l == c't_U16            = "<U16>"
+    | l == c't_S32            = "<S32>"
+    | l == c't_U32            = "<U32>"
+    | l == c't_F32            = "<F32>"
+    | l == c't_F64            = "<F64>"
+    | l == c't_tuple          = "<tuple>"
+    | l == c't_list           = "<list>"
+    | l == c't_disjoint_set   = "<disjoint_set>"
+    | l == c't_graph          = "<graph>"
+    | l == c't_node           = "<node>"
+    | l == c't_attribute      = "<attribute>"
     | l == c't_attribute_list = "<attribute_list>"
-    | l == c't_link =           "<link>"
-    | l == c't_link_head =      "<link_head>"
-    | l == c't_statistics =     "<statistics>"
-    | l == c't_pixel_image =    "<pixel_image>"
+    | l == c't_link           = "<link>"
+    | l == c't_link_head      = "<link_head>"
+    | l == c't_statistics     = "<statistics>"
+    | l == c't_raw_moments    = "<raw_moments>"
+    | l == c't_pixel_image    = "<pixel_image>"
 
 {-
 data TypedPointer =
@@ -217,3 +221,23 @@ instance Pointable (Float) where
       value :: CFloat
       value = realToFrac v
     with value $ \pvalue -> typedPointerCreate c't_F32 1 0 (castPtr pvalue)
+
+instance Pointable (Double) where
+  pointableType _ = PCDouble
+  pointableNull = 0
+  pointableFrom (C'typed_pointer l c t v)
+    | l == c't_S8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CSChar)
+    | l == c't_U8  = liftM fromIntegral $ peek ((castPtr v)::Ptr CUChar)
+    | l == c't_S16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CShort)
+    | l == c't_U16 = liftM fromIntegral $ peek ((castPtr v)::Ptr CUShort)
+    | l == c't_S32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CLong)
+    | l == c't_U32 = liftM fromIntegral $ peek ((castPtr v)::Ptr CULong)
+    | l == c't_F32 = liftM realToFrac   $ peek ((castPtr v)::Ptr CFloat)
+    | l == c't_F64 = liftM realToFrac   $ peek ((castPtr v)::Ptr CDouble)
+    | otherwise    = error $
+        "Unable to convert " ++ (showPointableType l) ++ " to Double"
+  pointableInto v = do
+    let
+      value :: CDouble
+      value = realToFrac v
+    with value $ \pvalue -> typedPointerCreate c't_F64 1 0 (castPtr pvalue)

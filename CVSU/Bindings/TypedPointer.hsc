@@ -34,6 +34,7 @@ import Foreign.Ptr
 #num t_link
 #num t_link_head
 #num t_statistics
+#num t_raw_moments
 #num t_accumulated_stat
 #num t_neighborhood_stat
 #num t_edge_response

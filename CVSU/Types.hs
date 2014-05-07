@@ -4,6 +4,11 @@ module CVSU.Types
 , Statistics(..)
 , hStatistics
 , cStatistics
+, statisticsNull
+, RawMoments(..)
+, hRawMoments
+, cRawMoments
+, rawMomentsNull
 , Direction(..)
 , hDirection
 , cDirection
@@ -91,6 +96,63 @@ instance Pointable Statistics where
     withForeignPtr fstat $ \pstat -> do
       poke pstat (cStatistics stat)
       typedPointerCreate c't_statistics 1 0 (castPtr pstat)
+
+data RawMoments =
+  RawMoments
+  { m00Raw :: Double
+  , m10Raw :: Double
+  , m01Raw :: Double
+  , m11Raw :: Double
+  , m20Raw :: Double
+  , m02Raw :: Double
+  }
+
+hRawMoments :: C'raw_moments -> RawMoments
+hRawMoments (C'raw_moments m00 m10 m01 m11 m20 m02) =
+  RawMoments
+    (realToFrac m00)
+    (realToFrac m10)
+    (realToFrac m01)
+    (realToFrac m11)
+    (realToFrac m20)
+    (realToFrac m02)
+
+cRawMoments :: RawMoments -> C'raw_moments
+cRawMoments (RawMoments m00 m10 m01 m11 m20 m02) =
+  C'raw_moments
+    (realToFrac m00)
+    (realToFrac m10)
+    (realToFrac m01)
+    (realToFrac m11)
+    (realToFrac m20)
+    (realToFrac m02)
+
+rawMomentsAlloc :: IO (ForeignPtr C'raw_moments)
+rawMomentsAlloc = do
+  ptr <- c'raw_moments_alloc
+  if ptr /= nullPtr
+    then newForeignPtr ptr (c'raw_moments_free ptr)
+    else error "Memory allocation failed in rawMomentsAlloc"
+
+rawMomentsNull = RawMoments 0 0 0 0 0 0
+
+rawMomentsFromPtr praw = do
+  raw <- peek praw
+  return $ hRawMoments raw
+
+instance Pointable RawMoments where
+  pointableType _ = PRawMoments
+  pointableNull = rawMomentsNull
+  pointableFrom (C'typed_pointer l c t v)
+    | l == c't_raw_moments =
+      rawMomentsFromPtr (castPtr v)
+    | otherwise =
+      error $ "Unable to convert " ++ (showPointableType l) ++ " to RawMoments"
+  pointableInto raw = do
+    fraw <- rawMomentsAlloc
+    withForeignPtr fraw $ \praw -> do
+      poke praw (cRawMoments raw)
+      typedPointerCreate c't_raw_moments 1 0 (castPtr praw)
 
 data Direction =
   DirN  |

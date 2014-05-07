@@ -4,6 +4,7 @@ module CVSU.Set
 ( Set(..)
 , setCreate
 , setNull
+, setAttribListCreate
 , setUnion
 , setFind
 , setGetId
@@ -59,6 +60,12 @@ setNull = do
 setAttribUnit :: AttribValue a => Set a -> Set ()
 setAttribUnit (Set p i s _) = Set p i s AttribUnit
 
+setAttribSize :: AttribValue a => Set a -> Int
+setAttribSize set = unsafePerformIO $ do
+  withForeignPtr (setPtr set) $ \pset -> do
+    s <- c'disjoint_set_attrib_size pset
+    return $ fromIntegral s
+
 -- | For use when must _not_ free the pointer, i.e. when creating a linking to
 --   an object stored in c structures that will be destroyed by the structure
 --   destructors
@@ -80,14 +87,14 @@ setFromFPtr :: AttribValue a =>
     ForeignPtr C'disjoint_set -> Attribute a -> IO (Set a)
 setFromFPtr fset attrib = withForeignPtr fset $ \pset ->
   if pset == nullPtr
-   then return $ Set fset 0 0 attrib
-   else do
-    C'disjoint_set {
-      c'disjoint_set'id = p,
-      c'disjoint_set'size = s
-    } <- peek pset
-    i <- c'disjoint_set_id p
-    return $ Set fset (fromIntegral i) (fromIntegral s) attrib
+    then return $ Set fset 0 0 attrib
+    else do
+      C'disjoint_set {
+        c'disjoint_set'id = p,
+        c'disjoint_set'size = s
+      } <- peek pset
+      i <- c'disjoint_set_id p
+      return $ Set fset (fromIntegral i) (fromIntegral s) attrib
 
 setUnion :: AttribValue a => Set a -> Set a -> IO (Set a)
 setUnion s1 s2 =
@@ -107,6 +114,14 @@ setGetId set = unsafePerformIO $
   withForeignPtr (setPtr set) $ \pset -> do
     i <- c'disjoint_set_id pset
     return $ fromIntegral i
+
+setAttribListCreate :: Set () -> Int -> IO (Set ())
+setAttribListCreate set attribSize =
+  withForeignPtr (setPtr set) $ \pset -> do
+    r <- c'disjoint_set_attributes_create pset (fromIntegral attribSize)
+    if r /= c'SUCCESS
+       then error $ "Creating attribute list failed in setAttribListCreate"
+       else setFromFPtr (setPtr set) AttribUnit
 
 setAttribList :: AttribValue a => Set a -> Ptr C'attribute_list
 setAttribList set = unsafePerformIO $
@@ -136,12 +151,14 @@ instance AttribValue a => AttribValue (Set a) where
   attribValue (PAttribSet(_,_,v)) = v
   attribIsNull (PAttribSet(_,k,_)) = k == 0
   attribInit p k v = (PAttribSet(p,k,v))
+
   attribCreateNull = do
     p <- attributeNull
     a <- attribCreateNull
     v <- setNull
     s <- setFromFPtr (setPtr v) a
     return (PAttribSet(p, 0, s))
+
   attribCreate key value
     | key == 0  = attribCreateNull
     | otherwise = do
@@ -159,27 +176,33 @@ instance AttribValue a => AttribValue (Set a) where
                 c'attribute'value = tptr
               } <- peek pattr
               v::(Set()) <- pointableFrom tptr
-              s <- setFromFPtr (setPtr v) (setAttr value)
+              a <- addAttribute (setAttr value) v
+              s <- setFromFPtr (setPtr v) a
               return $ PAttribSet(fattr, (fromIntegral k), s)
 
+  -- need to add first set with empty attrib list, then create the attrib list,
+  -- then add the set attribute into the attrib list.
   attribAdd attrib pattriblist = do
-    withForeignPtr (attribPtr attrib) $ \pattrib -> do
+    s <- setCreate
+    a <- attributeCreate (attribKey attrib) s
+    withForeignPtr (attribPtr a) $ \pa -> do
       let
-        pattrib2 :: Ptr C'attribute
-        pattrib2 = nullPtr
-      with pattrib2 $ \ppattrib2 -> do
-        r <- c'attribute_add pattriblist pattrib ppattrib2
+        pattrib :: Ptr C'attribute
+        pattrib = nullPtr
+      with pattrib $ \ppattrib -> do
+        r <- c'attribute_add pattriblist pattrib ppattrib
         if r == c'SUCCESS
           then do
-            pattrib' <- peek ppattrib2
+            pattrib' <- peek ppattrib
             (C'attribute k tptr) <- peek pattrib'
             -- create needed here to set the id to correct pointer
-            c'disjoint_set_create (castPtr $ c'typed_pointer'value tptr) 0
+            c'disjoint_set_create (castPtr $ c'typed_pointer'value tptr) 2
             v::(Set()) <- pointableFrom tptr
-            s <- setFromFPtr (setPtr v) (setAttr $ attribValue attrib)
+            a' <- addAttribute (setAttr $ attribValue attrib) v
+            s' <- setFromFPtr (setPtr v) a'
             -- not my responsibility to free, but the attriblist's owner's
             fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
-            return $ PAttribSet(fattrib, (fromIntegral k), s)
+            return $ PAttribSet(fattrib, (fromIntegral k), s')
           else attribCreateNull
 
   attribGet attrib pattriblist
@@ -193,7 +216,8 @@ instance AttribValue a => AttribValue (Set a) where
              c'attribute'value = tptr
            } <- peek pattrib
            v::(Set()) <- pointableFrom tptr
-           s <- setFromFPtr (setPtr v) (setAttr $ attribValue attrib)
+           attrib' <- attribGet (setAttr $ attribValue attrib) (setAttribList v)
+           s <- setFromFPtr (setPtr v) attrib'
            -- not my responsibility to free, but the attriblist's owner's
            fattrib <- newForeignPtr pattrib (c'attribute_free nullPtr)
            return $ PAttribSet(fattrib, (fromIntegral k), s)

@@ -24,10 +24,16 @@ import Data.Ord
 valueAttribute :: IO (Attribute Int)
 valueAttribute = attributeCreate 1 0
 
-componentAttribute :: IO (Attribute (Set ()))
+statAttribute :: IO (Attribute Statistics)
+statAttribute = attributeCreate 3 statisticsNull
+
+componentAttribute :: IO (Attribute (Set Statistics))
 componentAttribute = do
-  s <- setCreate
-  attributeCreate 2 s
+  set@(Set p i s _) <- setCreate
+  set' <- setAttribListCreate set 2
+  a <- statAttribute
+  a' <- addAttribute a set'
+  attributeCreate 2 (Set p i s a')
 
 valueGraph :: CGraph -> PixelImage -> Attribute Int -> IO (Graph Int)
 valueGraph cg pimg value =
@@ -39,8 +45,8 @@ valueGraph cg pimg value =
 -- using the setAttr attribute for storing the set membership.
 -- if has different value, creates a new set and uses the setLabel.
 -- returns the new setLabel and the new Node.
-unionWithSimilarNeighbors :: (Eq a, AttribValue a, AttribValue b) =>
-    Attribute (a,Set()) -> Node b -> IO ()
+unionWithSimilarNeighbors :: (Eq a, AttribValue a, AttribValue b, AttribValue c) =>
+    Attribute (a, Set b) -> Node c -> IO ()
 unionWithSimilarNeighbors pairAttr node = do
   (val,set) <- getAttribute pairAttr node
   neighbors <- nodeNeighbors node
@@ -50,16 +56,16 @@ unionWithSimilarNeighbors pairAttr node = do
       (nval,nset) <- getAttribute pair node
       if (val == nval)
          then setUnion set nset
-         else setNull
+         else return set
 
-findConnectedComponents :: (Eq a, AttribValue a, AttribValue b) =>
-  Attribute a -> Attribute (Set ()) -> [Node b] -> IO [Node (a,Set())]
+findConnectedComponents :: (Eq a, AttribValue a, AttribValue b, AttribValue c) =>
+  Attribute a -> Attribute (Set b) -> [Node c] -> IO [Node (a,Set b)]
 findConnectedComponents valueAttr setAttr nodes = do
   pairAttr <- attributePair valueAttr setAttr
   mapM_ (unionWithSimilarNeighbors pairAttr) nodes
   mapM (createAttributed pairAttr) $ map nodePtr nodes
 
-removeLinkSmaller :: Attribute (Set ()) -> Double -> Link -> IO ()
+removeLinkSmaller :: AttribValue a => Attribute (Set a) -> Double -> Link -> IO ()
 removeLinkSmaller setAttr t link =
   if linkWeight link < t
     then do
@@ -72,7 +78,7 @@ removeLinkSmaller setAttr t link =
         else return ()
     else return ()
 
-removeLink :: Attribute (Set ()) -> Link -> IO ()
+removeLink :: AttribValue a => Attribute (Set a) -> Link -> IO ()
 removeLink setAttr link = do
   set1 <- getAttribute setAttr $ linkFrom link
   set2 <- getAttribute setAttr $ linkTo link
@@ -82,16 +88,16 @@ removeLink setAttr link = do
       return ()
     else return ()
 
-minimumSpanningForest :: (Num a, AttribValue a, AttribValue b) =>
-  Attribute a -> Attribute (Set ()) -> Double -> Graph b -> IO (Graph (a,Set()))
+minimumSpanningForest :: (Num a, AttribValue a, AttribValue b, AttribValue c) =>
+  Attribute a -> Attribute (Set b) -> Double -> Graph c -> IO (Graph (a, Set b))
 minimumSpanningForest valueAttr setAttr t graph = do
   pairAttr <- attributePair valueAttr setAttr
   mapM_ (removeLinkSmaller setAttr t) $
       sortBy (comparing linkWeight) $ links graph
   graphGetAttribute pairAttr graph
 
-minimumSpanningTrees :: (Num a, AttribValue a, AttribValue b) =>
-  Attribute a -> Attribute (Set ()) -> Int -> Graph b -> IO (Graph (a,Set()))
+minimumSpanningTrees :: (Num a, AttribValue a, AttribValue b, AttribValue c) =>
+  Attribute a -> Attribute (Set b) -> Int -> Graph c -> IO (Graph (a, Set b))
 minimumSpanningTrees valueAttr setAttr n graph = do
   pairAttr <- attributePair valueAttr setAttr
   mapM_ (removeLink setAttr) $ take ((length $ links graph) - (n-1)) $

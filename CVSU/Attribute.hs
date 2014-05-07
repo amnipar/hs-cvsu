@@ -285,3 +285,138 @@ attributeCompare :: Eq Attribute a =>
 attributeCompare attrLabel attrEqual a b =
   attrEqual (attributeGet attrLabel a) (attributeGet attrLabel b)
 -}
+
+
+instance AttribValue Statistics where
+  type PAttribValue Statistics = ForeignPtr C'attribute
+  type Key Statistics = Int
+  newtype (Attribute Statistics) = 
+    PAttribStat(PAttribValue Statistics, Key Statistics, Statistics)
+  attribPtr (PAttribStat(p,_,_)) = p
+  attribKey (PAttribStat(_,k,_)) = k
+  attribValue (PAttribStat(_,_,v)) = v
+  attribIsNull (PAttribStat(_,k,_)) = k == 0
+  attribInit p k v = (PAttribStat(p,k,v))
+  attribCreateNull = do
+    p <- attributeNull
+    return (PAttribStat(p, 0, pointableNull))
+  attribCreate key value
+    | key == 0  = attribCreateNull
+    | otherwise = do
+      ftptr <- pointableInto value
+      -- this will be my responsibility to free
+      fattr <- attributeAlloc
+      withForeignPtr fattr $ \pattr ->
+        withForeignPtr ftptr $ \ptptr -> do
+          r <- c'attribute_create pattr (fromIntegral key) ptptr
+          if r /= c'SUCCESS
+            then error $ "Failed to create attribute with " ++ (show r)
+            else do
+              C'attribute{
+                c'attribute'key = k,
+                c'attribute'value = tptr
+              } <- peek pattr
+              v <- pointableFrom tptr
+              return $ PAttribStat(fattr, (fromIntegral k), v)
+
+  attribAdd attrib pattriblist = do
+    withForeignPtr (attribPtr attrib) $ \pattrib -> do
+      let
+        pattrib2 :: Ptr C'attribute
+        pattrib2 = nullPtr
+      with pattrib2 $ \ppattrib2 -> do
+        r <- c'attribute_add pattriblist pattrib ppattrib2
+        if r == c'SUCCESS
+          then do
+            pattrib' <- peek ppattrib2
+            (C'attribute k tptr) <- peek pattrib'
+            v <- pointableFrom tptr
+            -- not my responsibility to free, but the attriblist's owner's
+            fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
+            return $ PAttribStat(fattrib, (fromIntegral k), v)
+          else attribCreateNull
+
+  attribGet attrib pattriblist
+    | attribKey attrib == 0  = attribCreateNull
+    | otherwise = do
+      pattrib <- c'attribute_find pattriblist (fromIntegral $ attribKey attrib)
+      if pattrib /= nullPtr
+         then do
+           C'attribute{
+             c'attribute'key = k,
+             c'attribute'value = tptr
+           } <- peek pattrib
+           v <- pointableFrom tptr
+           -- not my responsibility to free, but the attriblist's owner's
+           fattrib <- newForeignPtr pattrib (c'attribute_free nullPtr)
+           return $ PAttribStat(fattrib, (fromIntegral k), v)
+         else attribCreateNull
+
+  attribSet attrib value pattriblist = return attrib -- TODO: implement
+
+instance AttribValue RawMoments where
+  type PAttribValue RawMoments = ForeignPtr C'attribute
+  type Key RawMoments = Int
+  newtype (Attribute RawMoments) = 
+    PAttribRMom(PAttribValue RawMoments, Key RawMoments, RawMoments)
+  attribPtr (PAttribRMom(p,_,_)) = p
+  attribKey (PAttribRMom(_,k,_)) = k
+  attribValue (PAttribRMom(_,_,v)) = v
+  attribIsNull (PAttribRMom(_,k,_)) = k == 0
+  attribInit p k v = (PAttribRMom(p,k,v))
+  attribCreateNull = do
+    p <- attributeNull
+    return (PAttribRMom(p, 0, pointableNull))
+  attribCreate key value
+    | key == 0  = attribCreateNull
+    | otherwise = do
+      ftptr <- pointableInto value
+      -- this will be my responsibility to free
+      fattr <- attributeAlloc
+      withForeignPtr fattr $ \pattr ->
+        withForeignPtr ftptr $ \ptptr -> do
+          r <- c'attribute_create pattr (fromIntegral key) ptptr
+          if r /= c'SUCCESS
+            then error $ "Failed to create attribute with " ++ (show r)
+            else do
+              C'attribute{
+                c'attribute'key = k,
+                c'attribute'value = tptr
+              } <- peek pattr
+              v <- pointableFrom tptr
+              return $ PAttribRMom(fattr, (fromIntegral k), v)
+
+  attribAdd attrib pattriblist = do
+    withForeignPtr (attribPtr attrib) $ \pattrib -> do
+      let
+        pattrib2 :: Ptr C'attribute
+        pattrib2 = nullPtr
+      with pattrib2 $ \ppattrib2 -> do
+        r <- c'attribute_add pattriblist pattrib ppattrib2
+        if r == c'SUCCESS
+          then do
+            pattrib' <- peek ppattrib2
+            (C'attribute k tptr) <- peek pattrib'
+            v <- pointableFrom tptr
+            -- not my responsibility to free, but the attriblist's owner's
+            fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
+            return $ PAttribRMom(fattrib, (fromIntegral k), v)
+          else attribCreateNull
+
+  attribGet attrib pattriblist
+    | attribKey attrib == 0  = attribCreateNull
+    | otherwise = do
+      pattrib <- c'attribute_find pattriblist (fromIntegral $ attribKey attrib)
+      if pattrib /= nullPtr
+         then do
+           C'attribute{
+             c'attribute'key = k,
+             c'attribute'value = tptr
+           } <- peek pattrib
+           v <- pointableFrom tptr
+           -- not my responsibility to free, but the attriblist's owner's
+           fattrib <- newForeignPtr pattrib (c'attribute_free nullPtr)
+           return $ PAttribRMom(fattrib, (fromIntegral k), v)
+         else attribCreateNull
+
+  attribSet attrib value pattriblist = return attrib -- TODO: implement

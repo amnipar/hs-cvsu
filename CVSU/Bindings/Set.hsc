@@ -32,9 +32,14 @@ import Foreign.C.Types
 
 #ccall disjoint_set_destroy , Ptr <disjoint_set> -> IO ()
 
+#ccall disjoint_set_attributes_create , Ptr <disjoint_set> -> CULong \
+  -> IO (<result>)
+
 #ccall disjoint_set_union , Ptr <disjoint_set> -> Ptr <disjoint_set> \
   -> IO (Ptr <disjoint_set>)
 
 #ccall disjoint_set_find , Ptr <disjoint_set> -> IO (Ptr <disjoint_set>)
 
 #ccall disjoint_set_id , Ptr <disjoint_set> -> IO (CULong)
+
+#ccall disjoint_set_attrib_size , Ptr <disjoint_set> -> IO (CULong)

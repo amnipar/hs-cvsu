@@ -156,3 +156,16 @@ import Foreign.Ptr
 #ccall statistics_alloc , IO (Ptr <statistics>)
 
 #ccall statistics_free , Ptr <statistics> -> IO ()
+
+#starttype raw_moments
+#field m00 , CDouble
+#field m10 , CDouble
+#field m01 , CDouble
+#field m11 , CDouble
+#field m20 , CDouble
+#field m02 , CDouble
+#stoptype
+
+#ccall raw_moments_alloc , IO (Ptr <raw_moments>)
+
+#ccall raw_moments_free , Ptr <raw_moments> -> IO ()
