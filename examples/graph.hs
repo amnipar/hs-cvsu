@@ -17,6 +17,7 @@ import CV.CVSU.Drawing
 
 import Foreign.ForeignPtr
 import ReadArgs
+import Debug.Trace
 
 import Data.List
 import Data.Ord
@@ -34,6 +35,16 @@ componentAttribute = do
   a <- statAttribute
   a' <- addAttribute a set'
   attributeCreate 2 (Set p i s a')
+
+-- The Set attribute with embedded Statistics attribute requires another
+-- attribute that is used for initializing (later also updating) the statistics.
+-- The element in which this set attribute is added later must already have this
+-- other attribute in place.
+setStatisticsCreate :: (Num a, AttribValue a) =>
+  Attribute a -> IO (Attribute (Set Statistics))
+
+setStatisticsAdd :: AttribValue a, Attributable b =>
+  b a -> Attribute (Set Statistics) -> b (a,Set Statistics)
 
 valueGraph :: CGraph -> PixelImage -> Attribute Int -> IO (Graph Int)
 valueGraph cg pimg value =
@@ -123,10 +134,14 @@ main = do
   pimg <- toPixelImage $ unsafeImageTo8Bit $ stretchHistogram $ gaussian (5,5) img
   -- threshold MaxAndZero 127 $
   value <- valueAttribute
+  print "a"
   comp <- componentAttribute
+  print "b"
   cg <- newCGraph
   vgraph <- valueGraph cg pimg value
+  print "c"
   sgraph <- graphAddAttribute comp vgraph
+  print "d"
   fgraph <- minimumSpanningForest value comp n sgraph
   --fgraph <- minimumSpanningTrees value comp n sgraph
   vals <- mapM (getAttribute value) (nodes fgraph)

@@ -290,7 +290,7 @@ attributeCompare attrLabel attrEqual a b =
 instance AttribValue Statistics where
   type PAttribValue Statistics = ForeignPtr C'attribute
   type Key Statistics = Int
-  newtype (Attribute Statistics) = 
+  newtype (Attribute Statistics) =
     PAttribStat(PAttribValue Statistics, Key Statistics, Statistics)
   attribPtr (PAttribStat(p,_,_)) = p
   attribKey (PAttribStat(_,k,_)) = k
@@ -334,7 +334,7 @@ instance AttribValue Statistics where
             -- not my responsibility to free, but the attriblist's owner's
             fattrib <- newForeignPtr pattrib' (c'attribute_free nullPtr)
             return $ PAttribStat(fattrib, (fromIntegral k), v)
-          else attribCreateNull
+          else error "adding statistics attribute failed" --attribCreateNull
 
   attribGet attrib pattriblist
     | attribKey attrib == 0  = attribCreateNull
@@ -357,7 +357,7 @@ instance AttribValue Statistics where
 instance AttribValue RawMoments where
   type PAttribValue RawMoments = ForeignPtr C'attribute
   type Key RawMoments = Int
-  newtype (Attribute RawMoments) = 
+  newtype (Attribute RawMoments) =
     PAttribRMom(PAttribValue RawMoments, Key RawMoments, RawMoments)
   attribPtr (PAttribRMom(p,_,_)) = p
   attribKey (PAttribRMom(_,k,_)) = k
