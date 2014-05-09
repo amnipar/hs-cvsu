@@ -43,6 +43,8 @@ componentAttribute = do
 setStatisticsCreate :: (Num a, AttribValue a) =>
   Attribute a -> IO (Attribute (Set Statistics))
 
+-- Adding a Set Statistics attribute to an attributable element requires that
+-- the receiving element has the attribute on which the statistics depend.
 setStatisticsAdd :: AttribValue a, Attributable b =>
   b a -> Attribute (Set Statistics) -> b (a,Set Statistics)
 
